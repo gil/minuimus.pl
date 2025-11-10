@@ -1,7 +1,10 @@
 #!/usr/bin/perl
 
+
 #Minuimus is released under the GPL v3, including the supporting programs written in C.
 #It is written by Codebird, AKA CorvusRidiculissimus on Reddit.
+
+
 
 use File::Spec;
 use File::Copy;
@@ -24,26 +27,34 @@ my $tmpdir = File::Temp->newdir();
 my $tmpfolder = $tmpdir->dirname;
 print("Using temporary folder $tmpfolder\n");
 my $qpdfvers=0;
-my $pdfsizeopt;
+my $pdfsizeopt=0;
 my $pdfsizeoptpath='/var/opt/pdfsizeopt/pdfsizeopt';
 
-if(! -x $pdfsizeoptpath){
-  $pdfsizeoptpath='/usr/bin/pdfsizeopt/pdfsizeopt';
-}
-if(! -x $pdfsizeoptpath){
-  $pdfsizeoptpath=`which pdfsizeopt`;
-  $pdfsizeoptpath =~ s/\n//;
+if("$^O" eq 'MSWin32'){
+  $pdfsizeoptpath=''
+}else{
+  if(! -x $pdfsizeoptpath){
+    $pdfsizeoptpath='/usr/bin/pdfsizeopt/pdfsizeopt';
+  }
+  if(! -x $pdfsizeoptpath){
+    $pdfsizeoptpath=`which pdfsizeopt`;
+    $pdfsizeoptpath =~ s/\n//;
+  }
 }
 
-####################
-# NO ARGUMENTS:`miniumus.pl`
-####################
 if (!@ARGV) {
-  print("minuimus.pl: condēnstor optimum tardissimum.\nThe best, slowest, compresser.\n\n"); #Condēnsō with -tor suffix. New Latin, I can make up words if I want to.
-  print("minuimus.pl <file> [file] [file] ... [file]\nor\nminuimus.pl *.[ext]\n\n");
-  print("For processing large numbers of files, use find:\nfind <target> -type f -print0|xargs -0 -P <threads> -n 8 minuimus.pl\nor\nfind <target> -type f -print0|parallel -0 -n 4 minuimus.pl\n\n");
-  print("For help, see: `minuimus.pl --help`\n");
-
+  print("  minuimus.pl: condēnstor optimum tardissimum.\n\n  The best, slowest, compresser.\n", #Condēnsō with -tor suffix. New Latin, I can make up words if I want to.
+        "  Minuimus makes files smaller, while leaving them functionally equivilent. It does this in a completely transparent manner - the smaller file is functionally equivilent to the original, and may be substituted for it without issue.\n",
+        "  It does this by calling upon a number of compression utilities: The AdvanceCOMP suite, optipng, jpegoptim, gifsicle, flexigif, qpdf, and several others.\n",
+        "  While you could just call these directly, minuimus can go one level better: It not only selects the right utility for each file, it will also extract the contents of zip and zip-like files such as epub or docx, and apply those utilities to all the files within as well. It even checks for animated PNG files and ensure only animation-safe utilities (ie, not advpng) are used.\n\n  It validates files after processing, comparing and looking for potential errors and unusual cases, automating the process from start to end. You need only point it to your files, wait, and watch them shrink.\n\n");
+  print("    minuimus.pl <file> [file] [file] ... [file]\n");
+  print("  For processing large numbers of files, use find:\n   find <target> -type f -print0|xargs -0 -P <threads> -n 8 minuimus.pl\n  or\n   find <target> -type f -print0|parallel -0 -n 4 minuimus.pl\n\n",
+        "  Supported types:\n  png jpg/jpeg gif tiff\n  zip epub docx xlsx jar cbz xps\n  pdf woff\n  gz tgz\n  flac swf\n",
+        "  Unsupported extensions will be ignored.\n\n",
+        "  minuimus.pl requires a number of supporting binaries, and will exit if a required component is missing. Most of these should be obtainable via your distribution's package managment. It also has supporting binary files (supplied as C code) which are not required to run minuimus, but will increase its capabilities. For full installation instructions, see the README file.\n",
+        "  For a full description of miniumus's operation and how each file type is optimised, see https://birds-are-nice.me/software/minuimus.html\n",
+        "  For ubuntu, 'make deps', 'sudo make install', then fetch flexigif from https://create.stephan-brumme.com/flexigif-lossless-gif-lzw-optimization/\n\n",
+        "  Minuimus is also capable of automating the conversion of many file types to more compact equivilents, but this ability is not transparent and so is not enabled by default. View 'minuimus.pl --help' to see the options for enabling these type conversions. \n\n");
   exit(0);
 }
 
@@ -63,70 +74,77 @@ for (@ARGV) {
 my @files = map { File::Spec->rel2abs($_) } @ARGV;
 $options{'recur-depth'}=1;
 
-####################
-# --help
-####################
 if($options{'help'}){
-  print("--check-deps    Checks for all core and optional dependencies (Actually checks for each called command individually)\n",
+  print("Minuimus, by default, performs only transparent conversions: It will never convert one type of file unless you explicitly enable this function.\n",
         "--help          Displays this help page\n",
         "--version       Displays current version, release date and credits\n\n",
         "The following options enable file format conversion and other non-transparent features, which will alter the format of your files in order further reduce filesize.\n\n",
         "--7z-zpaq       Convert 7z to ZPAQ. Aborts if larger than original. Tries to optimize the 7z first.\n",
         "--audio-agg     With --audio, converts MP3 to very low-bitrate OPUS. Sound quality suffers. Intended for voice, never music. Also re-encodes .m4b files.\n                All metadata preserved\n",
         "--audio         Enables compression of high-quality MP3 (>=256kbps) to OPUS 128kbps. This will also apply within archive files, for converting albums\n",
-        "--cbr-cbz       Converts CBR to CBZ. Likely creates a larger file, but allows image optimizations—resulting in ultimately smaller file\n",
+        "--cbr-cbz       Converts CBR to CBZ. Likely creates a larger file, but allows image optimizations resulting in ultimately smaller file\n",
         "--discard-meta  Discards metadata from image and PDF files. It only deletes the XML-based metadata, so the title remains\n",
         "--fix-ext       Detects some common file types with the wrong extension, and corrects\n",
         "--gif-png       Converts GIF files to PNG, including animated GIF to animated PNG. Likely results in a smaller file\n",
         "--iszip-<ext>   Forces a specified extension to be processed as a ZIP file\n",
         "--jpg-webp-cbz  Enables --jpg-webp when processing CBZ files. The space saving can be considerable, justifying the very slight quality loss\n",
+        "--webp-in-cbz   Convert PNG files within CBZ to WEBP. Results in substantial savings, but poor compatibility - some viewers wont open them\n",
         "--jpg-webp      Convert JPG to WebP using the knusperli decoder. This process is slightly lossy, using WebP quality: 90.\n                If the size reduction is <10%, conversion is rejected\n",
+        "--jpg-avif      As above, except for AVIF rather than WebP\n",
+        "--caffe         Enabled very experimental, unreliable, dangerous support for waifu2x-caffe-based denoising. See changelog before enabling.\n",
         "--keep-mod      Preserve the modification time of files, even if they are altered\n",
-        "--misc-png      Converts BMP and PCX files to PNG\n",
+        "--misc-png      Converts BMP and PCX files to PNG. Also some TIFFs.\n",
         "--omni-<ext>    Enables the 'omnicompressor' function for maximum size reduction for the specified file extension. Extremely slow. Intended for archival use\n                Compresses with gzip, bzip2, lz, rz, 7z on PPMd and zpaq on max, keeps the smallest\n",
         "--png-webp      Converts PNG to WEBP. Ignores animated PNG. Aborts if the conversion results in a larger file than the optimized PNG\n",
         "--rar-7z        Converts RAR to 7z. Allows recursive optimizations. Aborts if larger than original. Compressed with PPMd and LZMA separately, smallest is kept\n",
         "--rar-zip       Converts RAR to ZIP. Likely results in larger file, but allows processing of files within the RAR. Converting to 7z likely superior\n",
-        "--srr           Enables 'selective resolution reduction.' Scales images down, if doing so is lossless (or near lossless). That means pictures of flat colors, gradients, and sometimes pixel art\n",
         "--video         Enables lossy video recompression of legacy formats into WEBM. For why you might want to do this, see the note in the source file\n",
-        "--webp-in-cbz   Convert PNG files within CBZ to WEBP. Results in substantial savings, but poor compatibility—many viewers wont open them\n",
-        "--zip-7z        Converts ZIP to 7z. Aborts if larger than the original\n\n");
+        "--zip-7z        Converts ZIP to 7z. Aborts if larger than the original\n",
+        "--denormal-stl  Removes explicit normal vectors from STL files, saving around 30% in compressed size. The files are not /strictly/ standard compliant, but close enough.\n\n");
   exit(0);
 }
 
-####################
-# --version`
-####################
 if($options{'version'}){
-  print("Minuimus.pl - version 3.7.1\n",
+  print("Minuimus.pl - version 4.1 (2023 September)\n",
         "Written by Codebird\n",
         "Additional changes by Wdavery\n");
   exit(0);
 }
 
-####################
-# Imagemagick commands differ by distro. This should pick them up.
-####################
+#Imagemagick commands differ by distro. This should pick them up.
 my $im_identify='identify-im6';
 my $im_convert='convert-im6';
-`which $im_identify`;
-if($?){$im_identify='identify'};
-`which $im_convert`;
-if($? && ("$^O" ne 'MSWin32')){$im_convert='convert'};
+my $im_mode=0;
+if("$^O" eq 'MSWin32'){
+  $im_mode=1; #The fun of version compatibility: Some versions of magick use seperate identify and convert utilities, some use one for both.
+  $im_convert='magick'; #Notably can't use 'convert' on windows because of the built-in 'convert' command.
+  $im_identify='magick';
+}else{
+  `which $im_identify`;
+  if($?){$im_identify='identify'};
+  `which $im_convert`;
+  if($? && ("$^O" ne 'MSWin32')){$im_convert='convert'};
+}
+my @im_converta=($im_convert);
+my @im_identifya=($im_identify);
+if($im_mode==1){
+  @im_converta[1]='convert';
+  @im_identifya[1]='identify';
+}
 my $sha256sum='sha256sum';
 
+if("$^O" eq 'MSWin32'){
+  $sha256sum='rhash --sha256 -';
+}else{
 `which $sha256sum`;
-if($?){
-  $sha256sum='openssl dgst -sha256';
+  if($?){
+    $sha256sum='openssl dgst -sha256';
+  }
 }
-
-####################
-# CHECK-DEPS:`miniumus.pl --check-deps`
-####################
 if($options{'check-deps'}){
     my @deps = ("7z","advdef","advpng","advzip","brotli","bzip2","cab_analyze","cabextract","cwebp","$im_convert","ffmpeg",
-            "ffprobe","file","flac","flexigif","gif2apng","gifsicle","gzip","$im_identify","imgdataopt","jbig2","jbig2dec","jpegoptim",
-            "jpegtran","knusperli","leanify","lzip","minuimus_def_helper","minuimus_swf_helper","minuimus_woff_helper","mutool",
+            "ffprobe","file","flac","flexiGIF","gif2apng","gifsicle","gzip","$im_identify","imgdataopt","jbig2","jbig2dec","jpegoptim",
+            "jpegtran","knusperli","jpeg2png","leanify","lzip","minuimus_def_helper","minuimus_swf_helper","minuimus_woff_helper","mutool",
             "optipng","$pdfsizeoptpath","pdftoppm","pngout","png22pnm","qpdf","rzip","sam2p","unrar","zip","zpaq");
     foreach (@deps)
     {
@@ -134,19 +152,14 @@ if($options{'check-deps'}){
     }
 }
 
-#If you're looking for the note on why these's a video mode: Error detection, in short. All it does really is run ffmpeg, but use this script and you get the benefit of some fancier integrity checking.
+#If you're looking for the note on why there's a video mode: Error detection, in short. All it does really is run ffmpeg, but use this script and you get the benefit of some fancier integrity checking.
 #It'll compare the length in seconds of video before and after, so there's no chance of losing material because of a corrupted input file causing the encoder to crash.
 #Added bonus: If it finds an SRT file with the same name, it'll automatically include that too! Can't set the language tag though.
 #Be warned that it will delete the input file if encoding is successful.
 #This is really intended to rid the world of the really old legacy formats: DivX, WMV, MPEG1, etc. Ancient tech. With AV1 and the settings this uses, the loss of quality from reencode is not significent.
 #Mostly because any video in those formats will look terrible anyway. But it will make them much smaller, which is very nice.
-#Something to watch out for though: The ffmpeg in distro repositories tends to be /seriously/ out of date regarding libaom-av1, and you *need* a recent version. v1.0.0 sucks. Unusably slow.
-#At time of writing, ubuntu 20.04's apt-get only gives you libaom-av1 1.0.0 - the latest has passed 2.0.0 now! So you're probably going to have to compile ffmpeg yourself.
+#Something to watch out for though: The ffmpeg in distro repositories tends to be /seriously/ out of date, and you *need* a recent version.
 
-########################################
-# Main Routine
-####################
-# Iterates compressfile for every input file
 while ($_ = pop(@files)) {
   if(-f $_){
     compressfile($_, \%options);
@@ -160,9 +173,704 @@ while ($_ = pop(@files)) {
   }
 }
 
-####################
-# CAB processor: cab_analyze > cabextract
-####################
+sub processfolder(){
+  my $path=$_[0];
+  $path=~s/\n//;
+  if( -d $path){
+    print("Processing $path recursively.\n");
+    my $dh;
+    opendir($dh, $path);
+    my @dir_listing = readdir $dh;
+    closedir $dh;
+    for (@dir_listing){
+      if((substr($_, 0, 1) ne '.') &&
+         (substr($_, 0, 1) ne '$')){
+           push(@files, "$path/$_"); #Skip ., .. and hidden files.
+         }
+    }
+  }
+}
+
+sub depcheck($){
+  my $totest=$_[0];
+  if("$^O" eq 'MSWin32'){
+    `where $totest.exe /Q`;
+  }else{;
+    `which $totest`;
+  }
+   if(! $?){
+         print("Y $totest\n");
+    return;
+  }
+  print("N $totest\n");
+}
+
+sub compressfile($%) {
+  my $file=$_[0];
+  my %options = %{$_[1]};
+  my $saving=0;
+  if ($file =~ m/[";`\n]/){
+    print("Skipping $file due to potential attempted exploit in filename.\n");
+    return;
+  }
+
+  # Used to determine if any improvement was actually achieved.
+  my $initialsize = -s $file;
+  if(!$initialsize){
+    print("Input file '$file' does not exist or has zero size.\n");
+    return;
+  }
+  if($options{'fix-ext'}){
+    $file=fix_proper_ext($file);
+  }
+  
+  my $freespace=getfreespace();
+  if($freespace < $initialsize/256){
+    print("Possible insufficient free space on $tmpfolder - aborting. Will not attempt to process a file without 2x file size free. File $initialsize, free $freespace.\n");
+    return;
+  }
+
+  my $oldtime;
+  if($options{'keep-mod'}){
+     $oldtime=stat($file)->mtime;
+  }else{
+    $oldtime=time;
+  }
+  print("Attempting: $file:$initialsize\n");
+  my $ext=lc($file);
+  $ext=~s/^.*\.//;
+  if ($ext eq 'epub') {
+    # Every time you so much as open an epub in Calibre, it creates this.
+    system('zip', '-d',$file, 'META-INF/calibre_bookmarks.txt');
+  }
+  if($ext eq 'woff'){
+    process_woff($file);
+  }
+
+  if($ext eq 'mp3' ||
+     $ext eq 'mp4' ||
+     $ext eq 'webm'
+     #$ext eq 'avi' #After testing on a large collection of AVI files, including vintage ones, this does make many of them smaller - by about one-tenth of a percent. Not worth the effort.
+     ){
+    process_multimedia($file);
+  }
+
+  if($options{'audio'}){
+    if($ext eq 'mp3'){
+      $file=recode_audio($file);
+    }
+    if($options{'audio-agg'} &&
+      ($ext eq 'm4b')){
+      $file=recode_audio($file);
+    }
+    $ext=lc($file);
+    $ext=~s/^.*\.//;
+  }
+  if($ext eq 'gif'){
+    generic_image_recode($file);
+  }
+  if ($ext eq 'gif') {
+    if( $options{'gif-png'} ) {
+      $file=agif2apng($file); #If successful, returns new name. Otherwise returns old name.
+      $ext=lc($file);
+      $ext=~s/^.*\.//;
+    }else{
+      compress_gif($file);
+    }
+  }
+
+  if ($ext eq 'tif' ||
+      $ext eq 'tiff'){
+      process_tiff($file);
+  }
+
+  if (($ext eq 'pcx' ||
+      $ext eq 'bmp' ||
+      $ext eq 'tif' ||
+      $ext eq 'tiff')
+      && $options{'misc-png'}){
+    $file=img2png($file);
+    $ext=lc($file);
+    $ext=~s/^.*\.//;
+  }
+  
+  if ($options{'srr'}){
+    if(
+      ($ext eq 'png' && is_animated_png($file)==0) ||
+      ($ext eq 'webp' && is_animated_webp($file)==0) ||
+      $ext eq 'bmp'){
+      while(SRR_image($file)){};
+    }
+  }
+
+  if ($ext eq 'png') {
+    compress_png($file);
+    $options{'discard-meta'} && leanify($file);
+    if( $options{'png-webp'} ) {
+      $file=png2webp($file); #If successful, returns new name. Otherwise returns old name.
+      $ext=lc($file);
+      $ext=~s/^.*\.//;
+    }
+  }
+ 
+  if ($ext eq 'jpg' || $ext eq 'jpeg' || $ext eq 'jfif') {
+    process_jpeg($file, $options{'discard-meta'});
+    leanify($file, $options{'discard-meta'});
+    if($options{'jpg-webp'}){
+      $file=jpeg2webp($file, $options{'caffe'});
+      $ext=lc($file);
+      $ext=~s/^.*\.//;
+    }
+    if($options{'jpg-avif'}){
+      $file=jpeg2avif($file, $options{'caffe'});
+      $ext=lc($file);
+      $ext=~s/^.*\.//;
+    }
+  }
+  
+  if ($ext eq 'ico' ||
+      $ext eq 'fb2') {
+    leanify($file);
+  }
+  if ($ext eq 'stl') {
+    process_stl($file);
+    $saving+=denormal_stl($file);
+  }
+  if ($ext eq 'pdf') {
+    compress_pdf($file, $options{'discard-meta'});
+    pdfsizeopt($file) && pdfsizeopt($file, 1);
+  }
+  if ($ext eq 'flac') {
+    compress_flac($file);
+  }
+  if ($ext eq 'cab') {
+    compress_cab($file);
+  }
+  if ($ext eq 'html' ||
+      $ext eq 'htm') {
+    process_html($file);
+    optimise_base64_file($file);
+  }
+  if ($ext eq 'svg' ||
+      $ext eq 'css'){
+    optimise_base64_file($file);
+    $options{'discard-meta'} && leanify($file);
+  }
+  if ($ext eq 'jar' ||
+      $ext eq 'ipa') { #Not going to take these apart, too much risk of breaking things.
+    testcommand('advzip');
+    system('advzip', '-z4', '-q', $file);
+  }
+  if($ext eq 'gz' ||
+     $ext eq 'tgz' ){
+    testcommand('advdef');
+    system('advdef', '-z4', $file);
+  }
+  if($ext eq 'swf'){
+    `which minuimus_swf_helper `;
+    if( ! $?){
+      testcommand('jpegoptim');
+      system('minuimus_swf_helper', 'z', $file, $file);
+    }else{
+      print("Optional helper minuimus_swf_helper not found - skipping SWF file.\n");
+    }
+    leanify($file);
+  }
+
+  if($options{'video'} &&(
+    $ext eq 'avi' ||
+    $ext eq 'mpg' ||
+    $ext eq 'mpeg' ||
+    $ext eq 'ogm' ||
+    $ext eq 'mov' ||
+    $ext eq 'flv' ||
+    $ext eq 'ts' ||
+    ($ext eq 'mp4' && $options{'video-agg'})
+    )){
+    $file=processvideo($file);
+    $ext=lc($file);
+    $ext=~s/^.*\.//;
+  }
+
+  if ($ext eq 'docx' ||
+     $ext eq 'pptx' ||
+     $ext eq 'xlsx' ||
+     $ext eq 'zip' ||
+     $ext eq 'cbz' || #Comic book archive
+     $ext eq 'odt' || #OpenDocument
+     $ext eq 'ods' || #OpenDocument
+     $ext eq 'odp' || #OpenDocument
+     $ext eq 'epub'||
+     $ext eq 'xps' ||
+     $ext eq '7z' ||
+     ($ext eq 'cbr' && $options{'cbr-cbz'}) ||
+     ($ext eq 'rar' && $options{'rar-zip'}) ||
+     $options{"iszip-$ext"}){
+    $options{'recur-depth'} || return(0);
+    my $outtype='zip';
+    if($ext eq 'zip' && $options{'zip-7z'}){$outtype='7z'}
+    if($ext eq '7z' ){$outtype='7z'}
+    
+    my $ret=compress_zip($file,$outtype);
+    if($ret){
+      if($ret ne $file){
+        print("  New filename $ret\n");
+        $file=$ret;
+        $ext=lc($file);
+        $ext=~s/^.*\.//;
+      }
+    }else{
+      print("Archive processing failed.\n");
+    }
+  }
+
+  if($ext eq '7z' && $options{'7z-zpaq'}){
+    my $ret=compress_zip($file,'zpaq');
+    if($ret){
+      if($ret ne $file){
+        print("  New filename $ret\n");
+        $file=$ret;
+        $ext=lc($file);
+        $ext=~s/^.*\.//;
+      }
+    }else{
+      print("7z-zpaq conversion failed.\n");
+    }
+  }
+
+  if($ext eq 'rar' && $options{'rar-7z'}){
+    $options{'recur-depth'} || return(0);
+    my $ret=compress_zip($file,'7z');
+    if($ret){
+      if($ret ne $file){
+        print("  New filename $ret\n");
+        $file=$ret;
+        $ext=lc($file);
+        $ext=~s/^.*\.//;
+      }
+    }else{
+      print("Archive processing failed.\n");
+    }
+  }
+
+  if( $options{"omni-$ext"}){
+    my $ret=omnicompress($file);
+    if($ret){
+      if($ret ne $file){
+        print("  New filename $ret\n");
+        $file=$ret;
+        $ext=lc($file);
+        $ext=~s/^.*\.//;
+      }
+    }
+  }
+
+
+  my $finalsize= -s $file;
+  if(!$finalsize){
+    print("Minuimus most critical error encountered - data loss has resulted - aborting)! File was $file\n");
+    exit(255);
+  }
+  if ($initialsize != $finalsize) {
+      my $rate=$finalsize/$initialsize;
+      print("  Success! $initialsize to $finalsize ($rate)\n");
+      if($finalsize > $initialsize){
+        print("  Yet file somehow ended up larger? $file\n");
+      }
+      utime($oldtime, $oldtime, $file);
+      $saving=1;
+  } else {
+    print("  No space saving achieved ($initialsize->$finalsize).\n");
+  }
+  return($saving);
+}
+
+sub process_jpeg($$$){
+  my $file=$_[0];
+  my $copytype='all';
+  if($_[1]){ #A flag indicating that the file metadata may be discarded. Use when compressing a JPEG inside of another format.
+    $copytype='none';
+  }
+  my $ignoregrey=$_[2]; #Disables the greyscale image detection.
+  testcommand('jpegoptim');
+  my $ret=system('jpegoptim', '-T1', '--all-progressive', '-p', '-q', $file);
+  if($ret){
+    print "  Aborting processing of JPEG file. May be a damaged file or incorrect extension?\n";
+    return($file);
+  }
+
+
+  my $tempfile="$tmpfolder/greyconv-$$-$counter.jpg";
+  $counter++;
+  my $grey='';
+  if(testcommand_nonessential('jpegtran')){
+    if(!$ignoregrey && fileisgrey($file)){
+      print "  JPEG is greyscale but encoded as color. Converting to true greyscale.\n";
+      $grey='-grayscale';
+    }
+    if("$^O" ne 'MSWin32'){ #jpegtran on windows is a little different.
+      `jpegtran -optimize -progressive -copy $copytype $grey "$file" > $tempfile`;
+    }else{
+      `jpegtran -optimize -progressive -copy $copytype $grey "$file" $tempfile`;
+    }
+    leanify($tempfile);#Bit ugly, means leanify will be run twice, but still important to re-optimise the jpegtraned file before the size comparison.
+    my $before = -s $file;
+    my $after = -s $tempfile;
+    if($? || !$after ||$after >= $before){
+      unlink($tempfile);
+      return($file);
+    }
+    move($tempfile, $file);
+    unlink($tempfile);
+  }
+  return($file);
+}
+
+sub fileisgrey(){
+  my $file=$_[0];
+  my $tempfile="$tmpfolder/$$-$counter.bin";
+  $counter++;
+  testcommand_nonessential($im_identify) || return(0);
+  testcommand_nonessential($im_convert) || return(0);
+  print("  Checking for greyscale.\n");
+  my $desc;
+  if($im_mode==1){
+    $desc=`$im_identify identify "$file"`;
+  }else{
+    $desc=`$im_identify "$file"`;
+  }
+  if((index($desc, ' 8-bit sRGB ') == -1 ) &&
+     (index($desc, ', components 3') == -1 )){
+    print("  Not RGB.\n");
+    return(0);
+  }
+  my $pipe;
+  my $ret;
+
+  my $ret=system(@im_converta, $file, "rgb:$tempfile");
+  if($ret || !(-f $tempfile)){
+    unlink($tempfile);
+    print("  Error testing JPEG grey-scale. (Mode $im_mode com @im_converta)\n");
+    return(0);
+  }
+  my $pipe;
+  open ($pipe, '<:raw', $tempfile) or return(0);
+  binmode($pipe);
+  my $tot=0;
+  while(!eof($pipe)){
+    my $a;my $b;my $c;
+    my $check=read($pipe, $a, 1);
+    $check+=read($pipe, $b, 1);
+    $check+=read($pipe, $c, 1);
+    if(($check!=3) || ($a ne $b) || ($b ne $c)){
+      close($pipe);
+      unlink($tempfile);
+      return(0);
+    }
+    $tot++;
+  }
+  close($pipe);
+  unlink($tempfile);
+  if($tot < 192){
+    return(0);
+  }
+  return(1);
+}
+
+sub jpeg2webp(){
+  #This function is lossy, and so will only be used if the appropriate command-line option is given. It's not very lossy though. Tiny degredation.
+  my $input_file=$_[0];
+  my $use_caffe=$_[1];
+  my $tempfile="$tmpfolder/$$-$counter.png";
+  $counter++;
+  my $output_file=$input_file;
+  $output_file =~ s/\.jpg$/\.webp/i;
+  $output_file =~ s/\.jpeg$/\.webp/i;
+  if(($input_file eq $output_file) || -e $output_file){
+    return($input_file);
+  }
+  printq("  Attempting JPEG to WebP.\n");
+  testcommand('cwebp');
+  my $ret=jpeg2png_wrapper($input_file, $tempfile, $use_caffe);
+  if($ret || !(-f $tempfile)){
+    print("  Error in jpeg decoder.\n");
+    unlink($tempfile);
+    return($input_file);
+  }
+  $ret=system('cwebp', '-sharp_yuv', '-m', '6', '-q', '90', '-quiet', '-pass', '10', $tempfile, '-o', $output_file);
+  unlink($tempfile);
+  if($ret || !(-f $output_file)){
+    print("  Error in cwebp.\n");
+    unlink($output_file);
+    return($input_file);
+  }
+  if((-s $output_file) > (-s $input_file)*0.9){
+    printq("    Not worth the quality loss.\n");
+    unlink($output_file);
+    return($input_file);
+  }
+  printq("    JPEG converted to WebP. Slightly lossy.\n");
+  unlink($input_file);
+  return($output_file);
+}
+
+sub jpeg2avif(){
+  my $injpeg=$_[0];
+  my $use_caffe=$_[1];
+  my $interpng1="$tmpfolder/$$-$counter.png";
+  $counter++;
+
+  my $outavif=$injpeg;
+  $outavif =~ s/\.jpe?g$/\.avif/i;
+  print("  Converting $injpeg to $outavif\n");
+  if($injpeg eq $outavif){
+    print("  Filenames match / invalid extension not .jpg or .jpeg.\n");
+    return($injpeg);
+  }
+  if(-e $outavif){
+    print("  Output file already exists.\n");
+    return($injpeg);
+  }
+  my $ret=jpeg2png_wrapper($injpeg, $interpng1, $use_caffe);
+  if($ret || (! -s $interpng1)){
+    print("    Failed to read JPEG image. Corrupt or not-a-jpeg?\n");
+    return($injpeg);
+  }
+  my $ret;
+  $ret=system(@im_converta, $interpng1, '-define', 'heic:speed=0', '-define', 'heic:chroma=444', '-quality', '70', $outavif);
+  if((-s $outavif) == 0){
+    print("  Conversion failed.\n");
+    unlink($outavif);
+    return($injpeg);
+  }
+  my $jpegsize= -s $injpeg;
+  my $avifsize= -s $outavif;
+  print("  $jpegsize --> $avifsize\n");
+  if($avifsize >= ($jpegsize * 0.9)){
+    print("  Conversion successful, but failed to achieve sufficient space saving.\n");
+    unlink($outavif);
+    return($injpeg);
+  }
+  unlink($injpeg);
+  return($outavif);
+}
+
+sub jpeg2png_wrapper(){
+  #After a /lot/ of testing, I determined that jpeg2png produces a more accurate reconstruction than knusperli.
+  #It's not entirely reliable though - it fails on images with very large dimensions.
+  #So knusperli is required as a fallback.
+  my $ret;
+  my $outfile=$_[1];
+  my $use_caffe=$_[2];
+  my $caffetemp="$tmpfolder/$$-caffe-$counter.png";
+  $counter++;
+
+  if($use_caffe && (! (-X "d:/waifu2x-caffe/waifu2x-caffe-cui.exe"))){
+    $use_caffe=0;
+    print("  Waifu2x-caffe requested, but not present in the expected location.\n");
+  }
+  if(testcommand_nonessential('jpeg2png')){
+    $ret=system('jpeg2png', $_[0], '-q', '-i', '150', '-o', $outfile);
+  }
+  if(! -f $_[1]){
+    print("  jpeg2png failed, falling back to knusperli.\n");
+    testcommand('knusperli');
+    $ret=system('knusperli', $_[0], $outfile);
+  }
+  if($ret){
+    print("  JPEG decode failed. Possibly corrupt or non-JPEG file.\n");
+    unlink($outfile);
+    return(1);
+  }
+  if($use_caffe){
+    print("  Using waifu2x-caffe for noise removal. USE ON ILLUSTRATIONS ONLY!");
+    $ret=system('d:\waifu2x-caffe\waifu2x-caffe-cui.exe', '-i', $outfile, '-o', $caffetemp, '-m', 'noise', '-n', '0');
+    if($ret || (! -s $outfile)){
+      print("    Waifu2x-caffe noise-removal processing failed.\n");
+      return(1);
+    }
+    move($caffetemp, $outfile);
+  }
+  return(0);
+}
+
+sub getsha256($){
+  my $makesha256 = Digest::SHA->new("sha256");
+  my $fh;
+  open($fh, '<', $_[0]);
+  $makesha256->addfile($fh);
+  close($fh);
+  return(lc($makesha256->hexdigest));
+}
+
+sub png2webp(){
+  my $file=$_[0];
+  testcommand('cwebp');
+  my $anim=is_animated_png($file);
+  my $output_file=$file;
+  $output_file=~ s/\.png$/\.webp/i;
+
+  if ($anim != 0){
+    print("  Either not a PNG, or an animated PNG. Either way, not attempting PNG-WebP conversion.\n");
+    # Either animated, or not a PNG.
+    return($file);
+  }
+  print "  Attempting png->webp conversion.\n";
+  if(-e $output_file){
+    print("  WEBP file exists already.\n");
+    return($file);
+  }
+  my $tempfile="$tmpfolder/$$-$counter.webp";
+  $counter++;
+  system('cwebp', $file, '-lossless', '-quiet', '-z', '9', '-metadata', 'all', '-o', $tempfile);
+  if($? || (! -f $tempfile)){
+    print("  cwebp failed.\n");
+    unlink($tempfile);
+    return($file);
+  }
+  my $before= -s $file;
+  my $after= -s $tempfile;
+  if($after >= $before){
+    printq("  No space saving from webp conversion. Unusual.\n");
+    unlink($tempfile);
+    return($file);
+  }
+
+  move($tempfile, $output_file);
+  if(-f $output_file){
+    print("Converted '$file' to '$output_file'\n");
+    unlink($file);
+    return($output_file);
+  }
+  return($file);
+}
+
+sub img2png(){
+  #Converts most images to PNG.
+  #But not GIFs. Well, it would do GIFs, but it wouldn't preserve their animation.
+  my $input_file=$_[0];
+  my $not_ext=substr($input_file, 0,rindex($input_file, '.')+1);
+  my $tempfile="$tmpfolder/$$-$counter.png";
+  $counter++;
+  my $newname=$not_ext.'png';
+  if(-e $newname){
+    print "  Cannot convert file: Output '$newname' exists.\n";
+    return($input_file);
+  }
+  my $ext=lc($input_file);
+  $ext=~s/^.*\.//;
+  if($ext eq 'tiff' || $ext eq 'tiff'){
+    if(is_multi_image_tiff($input_file)){
+      print("  Either not a valid TIFF, or a TIFF containing multiple images, or tiffcp not found. Either way, not converting file.\n");
+      return($input_file);
+    }
+  }
+  testcommand($im_convert);
+  my $ret=system(@im_converta, $input_file, $tempfile);
+  if($ret){
+    print("  Conversion failed.\n");
+    unlink($tempfile);
+    return($input_file);
+  }
+  print "  Converted '$input_file' for '$newname'\n";
+  if(-s $tempfile > -s $input_file){
+    print("    But file got larger, so not keeping it.\n");
+    unlink($tempfile);
+    return($input_file);
+  }
+  move($tempfile, $newname);
+  if(! -f $newname){
+    print("  Conversion failed.\n");
+    unlink($tempfile);
+    return($input_file);
+  }
+  unlink($input_file);
+  return($newname);
+}
+
+sub process_tiff(){
+  my $file=$_[0];
+  if(! testcommand_nonessential('tiffcp')){
+    return(2);
+  }
+  print("  Applying TIFF optimisations. Errors are normal and harmless.\n");
+  my $tempfile="$tmpfolder/minu-$$-$counter.tiff";
+  $counter++;
+  my @attempts=('-p separate -c zip:p9', '-c zip:p9', '-c g3'); #Rejected LZMA+ZSTD+LZW because windows image viewer won't open it, even though LZMA is best.
+  for my $attempt (@attempts){
+    my @options=split(/ /, $attempt);
+#    print("  Trying '@options'\n");
+    my $ret=system('tiffcp', '-L', -'C', @options, $file, $tempfile);
+    if($ret || (! -s $tempfile)){
+      print("  Failed.\n");
+    }else{
+      my $b = -s $file;
+      my $a = -s $tempfile;
+      if($a < $b){
+        print("  Reduced $b to $a. (@options)\n");
+        move($tempfile, $file);
+      }
+    }
+    unlink($tempfile);
+  }
+}
+
+sub is_multi_image_tiff($){
+  #0: No.
+  #1: Yes.
+  #2: Error, maybe a bad file.
+  if(! testcommand_nonessential('tiffcp')){
+    return(2);
+  }
+  my $file=$_[0];
+  my $tempfile="$tmpfolder/minu-$$-$counter.tiff";
+  $counter++;
+  my $ret=system('tiffcp', '-c', 'none', "$file,0", $tempfile);
+  unlink($tempfile);
+  $ret && return(2);
+  print("  The following file,2 error is normal and harmless.\n");
+  $ret=system('tiffcp', '-c', 'none', "$file,1", $tempfile);
+  unlink($tempfile);
+  $ret && return(0);
+  return(1);
+}
+
+sub agif2apng($) {
+  my $input_file=$_[0];
+  my $initialcwd;
+  if (substr($input_file, 0, 1) eq '/'){
+    $initialcwd=getcwd();
+    chdir('/');
+    $input_file=substr($input_file, 1);
+#    print("Patch: $input_file\n");
+  }
+  my $output_file=$input_file;
+  $output_file=~ s/\.gif$/\.png/i;
+  print("Converting $input_file to $output_file\n");
+  if(-e $output_file){
+    print("  Conversion failed: $output_file exists.\n");
+    return($input_file);
+  }
+  testcommand('gif2apng');
+  system('gif2apng', $input_file, $output_file);
+  if($initialcwd){
+    chdir($initialcwd);
+    $input_file='/'.$input_file;
+    $output_file='/'.$output_file;
+  }
+  if( $? && -f $output_file ){ unlink($output_file); }
+
+  if( -f $output_file ){
+    print("Gif $input_file converted.\n");
+    unlink($input_file);
+  }else{
+    print("Conversion failed.\n");
+    return($input_file);
+  }
+  compress_png($output_file);
+  return($output_file);
+}
+
 sub compress_cab(){
   my $input_file=$_[0];
   if(!-e '/usr/bin/cab_analyze'){
@@ -188,9 +896,6 @@ sub compress_cab(){
   }
 }
 
-####################
-# ZIP processor: For all ZIP based formats
-####################
 sub compress_zip() {
   #Not just ZIP! This also handles zip-container-based formats.
   #It may also be used for archive conversion, so it returns 0 on fail, or the new filename on success.
@@ -248,6 +953,7 @@ sub compress_zip() {
     $suboptions{'misc-png'}=1;
     print("  Converting obsolete image formats to CBZ-friendly formats.\n");
     $suboptions{'png-webp'}=$options{'webp-in-cbz'};
+    $suboptions{'caffe'}=$options{'caffe'};
     $suboptions{'png-webp'} && print("  Using PNG-to-WEBP conversion.\n");
     $suboptions{'jpg-webp'}=$options{'jpg-webp-cbz'};
     $suboptions{'jpg-webp'} && print("  Using JPG-to-WEBP conversion.\n");
@@ -382,9 +1088,6 @@ sub compress_zip() {
   return($output_file);
 }
 
-####################
-# get_recursive_files: Utility
-####################
 sub get_recursive_files($){
   my $path=$_[0];
   $path=~s/\n//;
@@ -410,9 +1113,6 @@ sub get_recursive_files($){
   return(@returns);
 }
 
-####################
-# zip_compare: ZIP processor utility
-####################
 sub zip_compare(){
   #Call with two filenames for ZIP files.
   #Returns:
@@ -455,9 +1155,6 @@ sub zip_compare(){
   return(0);
 }
 
-####################
-# WOFF processor: minuimus_woff_helper
-####################
 sub process_woff(){
   my $file=$_[0];
   if(! -e '/usr/bin/minuimus_woff_helper'){
@@ -467,9 +1164,226 @@ sub process_woff(){
   system('minuimus_woff_helper', $file);
 }
 
-####################
-# PDF processor: mutool > qpdf > minuimus_def_helper
-####################
+sub compress_png($) {
+  my $file=$_[0];
+#  $tested_png || test_png();
+  testcommand('optipng');
+  testcommand('advdef');
+  testcommand('advpng');
+
+  my $anim=is_animated_png($file);
+
+  if ($anim == -1){
+    # Maybe not a valid PNG file?
+    return;
+  }
+
+  print "Compressing $file $anim ...\n";
+
+  system('optipng', '-quiet','-o6', '-nc', '-nb', $file);
+
+  if ($anim) {
+    system('advdef', '-z4', '-q', $file);
+  } else {
+    system('advpng', '-z4', '-q', $file);
+    testcommand_nonessential('pngout') && system('pngout', $file);
+  }
+}
+
+sub generic_image_recode($){
+  #Uses imagemagick to convert an image file to its own type, while at the highest compression settings.
+  #There are better tools for PNG and JPEG. But not for TIFF. Still going to run this on PNGs, but only as a first-effort.
+  #It also works on GIF, though again, only as a first-effort before trying some other tools.
+  my $file=$_[0];
+  my $ext=lc($file);
+  $ext=~s/^.*\.//;
+  if($ext eq 'png'){
+    is_animated_png($file) && return(0);#Convert does not support animated PNG.
+  }
+  testcommand($im_convert);
+  my $tempfile="$tmpfolder/image-$$-$counter.$ext";
+  $counter++;
+  if($ext eq 'gif'){
+    system(@im_converta, $file, $tempfile);
+  }elsif(($ext eq 'tif') || ($ext eq 'tiff')){
+    system(@im_converta, $file, '-quality', '90', '-compress', 'zip', $tempfile);
+  }else{
+    system(@im_converta, $file, '-quality', '95', $tempfile);
+  }
+  if($? || (-s $tempfile == 0)){unlink($tempfile);}
+  if(! -f $tempfile){
+    return(1);
+  }
+  if((-s $tempfile) < (-s $file)){
+    print("  generic_image_recode succeeded.\n");
+    unlink($file);
+    move($tempfile, $file);
+  }else{
+    unlink($tempfile);
+  }
+  return(0);
+}
+
+# Determine if the specified PNG file is animated. Return 1 if yes, 0 if no, or -1 if it appears to not be a valid PNG at all.
+sub is_animated_png() {
+  my $file=$_[0];
+  if (! -f $file) {
+    return(-1);
+  }
+  testcommand('advpng');
+  my @chunks=`advpng -l "$file"`;
+
+  if ($?) {
+    return(-1);
+  }
+
+  for (@chunks) {
+    if (substr($_, 0, 4) eq 'acTL') {
+      return(1);
+    }
+  }
+
+  return(0);
+}
+
+sub compress_gif(){
+  my $file=$_[0];
+  testcommand('gifsicle');
+  my $tempfile="$tmpfolder/$$-$counter";
+  $counter++;
+  if (-e $tempfile) {
+    print "Gif compressor error 1\n";
+    return;
+  }
+  system('gifsicle', '-O3', $file, '-o', $tempfile);
+
+  if (! -f $tempfile) {
+    print "Gif compressor error 2\n";
+    return;
+  }
+
+  my $befores = -s $file;
+  my $afters = -s $tempfile;
+
+  if (! $afters) {
+    print "Gif compressor error 3\n";
+    return;
+  }
+
+  if ($afters < $befores) {
+    move($tempfile, $file);
+  }
+
+  if (-f $tempfile) {
+    unlink($tempfile);
+  }
+
+  $befores = -s $file;
+
+  if (!testcommand_nonessential('flexiGIF') || $befores>102400) {
+    # FlexiGIF is a optional thing, mostly because it's not in the ubuntu
+    # apt-get repository.
+    return;
+  }
+
+  # It's also incredibly slow - so painfully slow that it's best skipped for
+  # large files, otherwise it could take all day - and that's not hyperbole.
+  system('flexiGIF', '-p', $file, $tempfile);
+
+  $afters = -s $tempfile;
+
+  if (! $afters) {
+    print "Gif compressor error 3b\n";
+    return;
+  }
+
+  if ($afters < $befores) {
+    move($tempfile, $file);
+  }
+
+  if (-f $tempfile) {
+    unlink($tempfile);
+  }
+}
+
+sub compress_flac(){
+  my $file=$_[0];
+  testcommand('flac');
+  #Reencode a FLAC file. There are two reasons for this:
+  # 1. Turning the compression settings up to eleven. Or at least as high possible without the compatibility issues that --lax would allow.
+  # 2. Some FLAC files will have been compressed using earlier, less-efficient versions of the encoder. So recompressing with a new version will make them smaller.
+  # 3. Occasionally (rarely) a mono file will be incorrectly and wastefully encoded as stereo.
+  my $tempfile="$tmpfolder/$$-$counter.flac";
+  $counter++;
+  my $isnotmono= !isnotmonoable($file);#Yes, double negative.
+  if($isnotmono){
+    testcommand('ffmpeg');
+    my $ret = system('ffmpeg', '-i', $file, '-ac', '1', $tempfile);
+    $ret && unlink($tempfile);
+    if(-f $tempfile){
+      if((-s $tempfile != 0) && (-s $tempfile < -s $file)){
+        print("    FLAC file converted to mono.\n");
+        move($tempfile, $file);
+      }else{
+        print("    Monoconversion failed(1)\n");
+      }
+      unlink($tempfile);
+    }else{
+        print("    Monoconversion failed(2)\n");
+    }
+    $tempfile="$tmpfolder/$$-$counter.flac";
+    $counter++;
+  }
+  my $bs=flac_test_optimal_BS($file);
+  print("  Determined optimal blocksize $bs\n");
+  system('flac', '-8epV', '-r', '0,8', '--serial-number', '0', '--totally-silent', '--blocksize', $bs, $file, '-o', $tempfile);
+  #The flac encoder is very helpful in this: Not only will it encode FLAC to FLAC, it also preserves all metadata while doing so!
+  #Setting serial to 0 because deterministic helps in testing.
+  #Experimented with the -A options, but not really worth it for an extra 0.1% - plus they are version-specific.
+  if($? or !(-f $tempfile)){
+    unlink($tempfile);
+    print(" FLAC re-encode error: Possible corrupted file '$file'\n");
+    return;
+  }
+  if((-s $tempfile) >= (-s $file)){
+    unlink($tempfile);
+    print(" FLAC re-encode successful, but the file did not get smaller. Keeping original.\n");
+    return;
+  }
+  unlink($file);
+  move($tempfile, $file);
+  print("  FLAC re-encode successful.\n");
+}
+
+sub flac_test_optimal_BS(){
+  my $file=$_[0];
+  my $tempfile="$tmpfolder/$$-$counter.flac";
+  #This optimisation is based on https://blobfolio.com/2022/flac-compression/
+  #It takes lots of processor time and shrinks maybe 1% on some files.
+  #Only a true fanatic would consider this worthwhile.
+  #That would be me.
+  print("  Blocksize optimisation attempting on $file\n");
+  my @candidates=(512,576,1024,1152,2048,2304,4096,4608);
+  my $smallest=0;
+  my $smallestbs=4096;
+  for my $bs (@candidates){
+    system('flac', '-8', '-r', '0,8', '--blocksize', $bs, '--totally-silent', $file, '-o', $tempfile);
+    my $newsize = -s $tempfile;
+    if($? or !(-f $tempfile)){
+      print(" FLAC re-encode error while testing candidate block sizes: Possible corrupted file '$file' - assuming 4096 and attempting to ignore.\n");
+      unlink($tempfile);
+      return(4096);
+    }
+    elsif(!$smallest || ($newsize <= $smallest)){
+      $smallestbs=$bs;
+      $smallest=$newsize;
+#      print("Best candidate blocksize: $smallestbs at size $smallest\n");
+    }
+    unlink($tempfile);
+  }
+  return($smallestbs);
+}
+
 sub compress_pdf() {
   my $file=$_[0];
   my $discard_meta=$_[1];
@@ -483,13 +1397,13 @@ sub compress_pdf() {
   $counter++;
   print("  adv_pdf($file) using tempfile $tempfile\n");
   if(testcommand_nonessential('mutool')){
-    print("  Pre-processing with mutool");
+    print("    Pre-processing using mutool.\n");
     system('mutool', 'clean', '-gggg', $file, $tempfilemu);
-    if((-s $tempfilemu >= -s $file) || !pdfcompare($file, $tempfilemu)){
-      print(": Done (Failed)\n");
+    if( (! -s $tempfilemu) ||(-s $tempfilemu >= -s $file) || !pdfcompare($file, $tempfilemu)){
+      print("      Mutool unsuccessful.\n");
       unlink($tempfilemu);
     }else{
-      print(": Done\n");
+      print("      Mutool successful.\n");
       move($tempfilemu, $file);
     }
   }
@@ -501,7 +1415,7 @@ sub compress_pdf() {
     my $vers=`qpdf --version`;
     $vers=~ m/version (\d+)/i;
     $qpdfvers=$1;
-    printq("      Detected qpdf version >=$qpdfvers\n");
+    print("  Detected qpdf version >=$qpdfvers\n");
   }
   my @opt_args;
   if($qpdfvers >= 9){
@@ -561,7 +1475,7 @@ sub compress_pdf() {
   printq("    Compression done. Checking compressed PDF integrity.\n");
   my $test=pdfcompare($file, $tempfile2, $pdfhash);
   if($test){
-    print("    Advanced PDF processing done: Was $was, finished $done.\n");
+    print("  Advanced PDF processing done: Was $was, finished $done.\n");
     move($tempfile2, $file)
   }else{
     unlink($tempfile2);
@@ -569,9 +1483,7 @@ sub compress_pdf() {
   }
 }
 
-####################
-# adv_pdf_iterate_objects: PDF processor utility
-####################
+
 sub adv_pdf_iterate_objects(){
   my $filename=$_[0];
   my $dostreams=$_[1];
@@ -637,26 +1549,23 @@ sub adv_pdf_iterate_objects(){
         if($dict && ($dict ne $origdict)){ 
           sysseek($fh, $offset, SEEK_SET); #And write the patched dictionary in - for the benefit of later processing.
           syswrite($fh, $dict, length($dict));
-           $opti_obj++;
+          $opti_obj++;
         }
         if($dostreams){
           $opti_str+=advpdf_obj($fh, $object, $offset, $dict);
         }
-        }
       }
     }
+  }
   close($fh);
   if($dostreams){
-      print("    adv_pdf_iterate_objects() complete. Optimised $opti_obj object headers, $opti_str stream contents.\n");
-    }else{
-      print("    adv_pdf_iterate_objects() complete. Optimised $opti_obj object headers.\n");
-    }
+    print("    adv_pdf_iterate_objects() complete. Optimised $opti_obj object headers, $opti_str stream contents.\n");
+  }else{
+    print("    adv_pdf_iterate_objects() complete. Optimised $opti_obj object headers.\n");
+  }
   return($opti_obj + $opti_str);
 }
 
-####################
-# advpdf_obj: PDF processor utility
-####################
 sub advpdf_obj(){
   my $fh=$_[0];
   my $object=$_[1];
@@ -689,7 +1598,7 @@ sub advpdf_obj(){
   my $streamlen=substr($dict, index($dict, ' /Length ')+9);
   $streamlen=substr($streamlen, 0, index($streamlen, ' '));
   if($streamlen<=5){return(0);}
-  #  print("Processing object:\n$object\n");
+#  print("Processing object:\n$object\n");
   my $contentsoffset=$offset+length($dict)+1;
   my $contents;
   sysseek($fh, $contentsoffset, SEEK_SET);
@@ -710,7 +1619,7 @@ sub advpdf_obj(){
       my $defret=system('minuimus_def_helper', $tempname, 1)>>8;
       if($defret == 2){
         $dict=substring_replace($dict, '/ColorSpace /DeviceRGB ', '/ColorSpace /DeviceGray'); #qpdf always allows us a generous extra space we can fill up.
-        print("    Converted an RGB24 image to Y8.\n");
+        print("  Converted an RGB24 image to Y8.\n");
       }
     }else{
       system('minuimus_def_helper', $tempname); #Simple DEFLATE, not an image.
@@ -725,11 +1634,11 @@ sub advpdf_obj(){
   sysread($tempfh, $contents, $newlen);
   close($tempfh);
   unlink($tempname);
-      
+  
   if($newlen >= $streamlen){
     return(0);
-  }     
-    #print("Optimised stream:\n$dict\nLen $streamlen -> $newlen\n");
+  }
+  #print("Optimised stream:\n$dict\nLen $streamlen -> $newlen\n");
   sysseek($fh, $contentsoffset, SEEK_SET);
   syswrite($fh, $contents, $newlen) || die "write failed";
   syswrite($fh, "endstream\nendobj\n", 17);
@@ -747,7 +1656,7 @@ sub advpdf_obj(){
   }
   sysseek($fh, $offset, SEEK_SET);
   syswrite($fh, $dict, length($dict));
-    return(1); #Indicates a successful reduction.
+  return(1); #Indicates a successful reduction.
 }
 
 sub process_jbig2(){
@@ -777,9 +1686,6 @@ sub process_jbig2(){
     return($tempname);
 }
 
-####################
-# substring_replace: PDF processor utility
-####################
 sub substring_replace(){
   #Takes a string, and a substring, and a replacement string. Replaces the substring in string with the replacement string.
   #Pads with spaces in the process! $c must be shorter than or equal to $b in length. Notable this is, unlike regexs, guaranteed binary-safe.
@@ -795,16 +1701,14 @@ sub substring_replace(){
   return($a);
 }
 
-####################
-# PDF processor: pdfsizeopt; Additional to compress_pdf
-####################
 sub pdfsizeopt(){
   #Runs pdfsizeopt, if it's available.
   my $in_file=$_[0];
   my $no_jbig2=$_[1];
 
   is_pdfsizeopt_installed() || return(0);
-  #  my $initialcwd=getcwd();
+  print("Calling upon pdfsizeopt\n");
+#  my $initialcwd=getcwd();
   my $tempfile="$tmpfolder/minu-sizeopt-$$-$counter.pdf";
   my $tempfile2="$tmpfolder/minu-sizeopt-$$-$counter-b.pdf";
   $counter++;
@@ -821,7 +1725,7 @@ sub pdfsizeopt(){
     print("    Retrying pdfsizeopt without jbig2 and font optimisations (As these are the most likely to cause a crash).\n");
     push(@args, '--do-optimize-fonts=no');
   }
-  print("  Processing with pdfsizeopt ($optimisers)\n");
+  print("    Invoking pdfsizeopt ($optimisers)\n");
   push(@args, $optimisers);
   push(@args, $in_file, $tempfile);
   system(@args);
@@ -854,12 +1758,18 @@ sub pdfsizeopt(){
 sub is_pdfsizeopt_installed(){
   if($pdfsizeopt==1){return(0);}
   if($pdfsizeopt==2){return(1);}
+  if("$^O" eq 'MSWin32'){
+    print("    calling pdfsizeopt is not supported on windows: It's almost impossible to make it work anyway.\n");
+    $pdfsizeopt=1;
+    return(0);
+  }
   testcommand('optipng');
   testcommand('advpng');
   if((-e $pdfsizeoptpath) &&
      testcommand_nonessential('png22pnm') &&
      testcommand_nonessential('sam2p')){
     $pdfsizeopt=2;
+    print("  pdfsizeopt detected.\n");
     return(1);
   }
   $pdfsizeopt=1;
@@ -868,9 +1778,6 @@ sub is_pdfsizeopt_installed(){
   return(0);
 }
 
-####################
-# extract_archive: ZIP processor utility
-####################
 sub extract_archive(){
   #Extracts an archive into CWD.
   #Returns non-zero upon any sort of failure.
@@ -878,7 +1785,7 @@ sub extract_archive(){
   my $ext=lc($input_file);
   $ext=~s/^.*\.//;
   my $err=1;
-
+  
   if($ext eq 'rar' ||
      $ext eq 'cbr'){
     testcommand('unrar');
@@ -886,14 +1793,14 @@ sub extract_archive(){
   }elsif($ext eq '7z' ||
          $ext eq 'cb7'){
     testcommand('7z');
-    $err=system('7z', 'x', $input_file);
+    $err=system('7z', 'x', '-bd', $input_file);
   }else{
     if("$^O" eq 'MSWin32'){
       testcommand('tar');
       $err=system('tar', '-xf', $input_file); #Windows has a built in tar command which will also extract zips.
     }else{
-    testcommand('unzip');
-    $err=system('unzip', '-q', $input_file);
+      testcommand('7z');
+      $err=system('7z', 'x', '-bd', $input_file);
     }
   }
   # Because some epubs, for some odd reason, seem to like putting a unix
@@ -903,9 +1810,6 @@ sub extract_archive(){
   return(0);
 }
 
-####################
-# make_zip: ZIP processor utility
-####################
 sub make_zip(){
   #Makes a zip file from the CWD. Returns 1 upon failure.
   my $dest=$_[0];
@@ -938,9 +1842,6 @@ sub make_zip(){
   return(0);
 }
 
-####################
-# make_7z: ZIP processor utility
-####################
 sub make_7z(){
   #This makes a 7z file. It is responsible for choosing the best compression.
   #Returns 1 if fail.
@@ -948,34 +1849,29 @@ sub make_7z(){
   if(-e $output_file){print("Output 7z already exists\n");return(1);}
   testcommand('7z');
   system('7z', 'a', '-t7z', '-m0=lzma', '-mx=9', '-mfb=64', '-md=128m', '-mmt=off', '-bd', '-bb0', "$output_file-A", '.');
-  if($?){print "  7z error. Aborting.\n";unlink("$output_file-A");return(1)};
+  if($?){print "  7z error. Aborting (lzma).\n";unlink("$output_file-A");return(1)};
   system('7z', 'a', '-t7z', '-m0=PPMd', '-mmem=128m', '-mmt=off', '-mo=15', '-bd', '-bb0', "$output_file-B", '.');
-  if($?){print "  7z error. Aborting.\n";unlink("$output_file-A");unlink("$output_file-B");return(1)};
+  if($?){print "  7z error tying PPMd - worked with LZMA, so probably your 7z version just doesn't support PPMd.\n"};
   print "LZMA size: ".(-s "$output_file-A")."\n";
   print "PPMd size: ".(-s "$output_file-B")."\n";
-  if((-s "$output_file-A" ) > (-s "$output_file-B")){
-    unlink("$output_file-A");move("$output_file-B", $output_file);
-  }else{
+  if(-s "$output_file-B" == 0){
     unlink("$output_file-B");move("$output_file-A", $output_file);
+  }else{
+   if((-s "$output_file-A" ) > (-s "$output_file-B")){
+      unlink("$output_file-A");move("$output_file-B", $output_file);
+    }else{
+      unlink("$output_file-B");move("$output_file-A", $output_file);
+    }
   }
-
-  my @filelist=split(
-    /\0/,
-    `find . -type f -print0`
-  );
-  my $numfiles=@filelist;
-  if($numfiles==1){
-    print("Best size: ".(-s $output_file)."\n");
-    return(0);
+  if(!(-s $output_file)){
+    print("Zero-byte output file, something went wrong, aborting.\n");
+    unlink($output_file);
+    return(1);
   }
-
   print("Best size: ".(-s $output_file)."\n");
   return(0);
 }
 
-####################
-# make_zpaq: ZIP processor utility
-####################
 sub make_zpaq(){
   my $output_file=$_[0];
   testcommand('zpaq');
@@ -999,9 +1895,6 @@ sub make_zpaq(){
   return(0);
 }
 
-####################
-# pdfcomapre: PDF processor utility
-####################
 sub pdfcompare(){
   #Returns 0 upon fail (Either a PDF is damaged, or they don't match.)
   #If they do match, returns the hash.
@@ -1019,9 +1912,6 @@ sub pdfcompare(){
   return($hasha);
 }
 
-####################
-# --omni-<ext>: Omnicompressor option
-####################
 sub omnicompress(){
   #Runs the file through a few different compression programs, and applies the smallest.
   #This includes the notoriously slow zpaq. On maximum settings.
@@ -1103,9 +1993,23 @@ sub omnicompress(){
   return($output_file);
 }
 
-####################
-# omni_whichisbigger: Omnicompressor utility
-####################
+sub testcommand($){
+  my $totest=$_[0];
+  if($testedcommands{$totest}){return;}
+  if("$^O" eq 'MSWin32'){
+    $totest=$totest.'.exe';
+    `where $totest`
+  }else{
+    `which $totest`;
+  }
+   if(! $?){
+    $testedcommands{$totest}=1;
+    return;
+  }
+  print("Minuimus requires $totest. Install dependency or 'make deps' and retry.\n");
+  exit(1);
+}
+
 sub omni_whichisbigger(){
   my $alpha=$_[0];
   my $beta=$_[1];
@@ -1129,9 +2033,16 @@ sub omni_whichisbigger(){
     return($beta);
 }
 
-####################
-# HTML processor
-####################
+sub getfreespace(){
+  if("$^O" eq 'MSWin32'){ #Absolutely hideous ugly hack.
+    return(1000000000000);
+  }
+  my @ret=`df -Pk "$tmpfolder/"`;
+
+  my @columns=split(' ', $ret[1]);
+  return($columns[3]);
+}
+
 sub process_html(){
   #Convert upper-case characters in HTML tags to lower-case. This saves us zero bytes. But it does render the HTML slightly more compressible.
   #So it's an indirect space saving. And if it can knock another hundred-odd bytes off an epub, I'm doing it.
@@ -1182,9 +2093,7 @@ sub process_html(){
   move($tempfilename, $input_filename);
   return($changed);
 }
-####################
-# html_line_lc: HTML processor utility
-####################
+
 sub html_line_lc(){
   #Why am I using this heap of string manipulation rather than an HTML parser?
   #Because people write awful HTML, and I don't trust any parsing library not to go horribly wrong when it encounters malformed tags.
@@ -1218,9 +2127,6 @@ sub html_line_lc(){
   return($head.$mid,$tail);
 }
 
-####################
-# HTML, CSS, SVG processor
-####################
 sub optimise_base64_file(){
   #Optimises a file with embedded base64-encoded objects. These objects may be found within HTML, CSS and SVG.
   my $file=$_[0];
@@ -1251,9 +2157,6 @@ sub optimise_base64_file(){
 
 }
 
-####################
-# optimise_base64_object: HTML/CSS/SVG processor utility
-####################
 sub optimise_base64_object(){
   my $index=index($_, ';base64,')+8;
   my $description=substr($_, 0, $index);
@@ -1284,6 +2187,7 @@ sub optimise_base64_object(){
   }
   return($_);  
 }
+
 sub readwholefile(){
   open my $fh, '<:raw', $_[0] or return;
   my $input = do { local $/; <$fh> };
@@ -1297,9 +2201,6 @@ sub writewholefile(){
   close($fh);
 }
 
-####################
-# do_comparison_hash: HTML/CSS/SVG processor utility
-####################
 sub do_comparison_hash(){
   #Used for before-after tests on image files.
   my $ext=lc($_[0]);
@@ -1307,1060 +2208,16 @@ sub do_comparison_hash(){
   if($ext eq 'svg'){
     my $tempfile="$tmpfolder/minuimus-comptemp-$$-$counter.bmp";
     $counter++;
-    system($im_convert, $_[0], $tempfile);
+    system(@im_converta, $_[0], $tempfile);
     my $hasha=`$sha256sum $tempfile`;
     unlink($tempfile);
-    system($im_convert, $_[1], $tempfile);
+    system(@im_converta, $_[1], $tempfile);
     my $hashb=`$sha256sum $tempfile`;
     unlink($tempfile);
     return($hasha ne $hashb);
   }else{return(0);}
 }
 
-####################
-# STL processor
-####################
-sub process_stl($){
-  my $file=$_[0];
-  my $fh;
-  open($fh, "<", "$file") || return;
-  local $_ = <$fh>;
-  s/[\r\n]//;
-
-  if(! m/^solid .*\n/){
-    close($fh);
-    return;
-  }
-  my ($name) = /^solid (.*?)$/msg;
-  print "Converting STL. Name: $name\n";
-  my $numtris=0;
-  my @triangle;
-  my @output_file;
-  #push(@output_file, "                                                                                ");
-  while(<$fh>){
-    s/ +/ /g;
-    s/^ *//g;
-    s/ *$//g;
-    s/\r//;
-    s/\n//;
-    push(@triangle, $_);
-    if( $_ eq 'endfacet' ){
-      if(@triangle != 7 ||
-         $triangle[1] ne 'outer loop' ||
-         $triangle[5] ne 'endloop' ||
-         $triangle[6] ne 'endfacet') {close($fh);return(0);}
-      $triangle[0] =~ s/[^0-9e -.]//g;
-      $triangle[0] =~ s/^[ e]*//g;
-      $triangle[2] =~ s/[^0-9e -.]//g;
-      $triangle[2] =~ s/^[ e]*//g;
-      $triangle[3] =~ s/[^0-9e -.]//g;
-      $triangle[3] =~ s/^[ e]*//g;
-      $triangle[4] =~ s/[^0-9e -.]//g;
-      $triangle[4] =~ s/^[ e]*//g;
-      push(@output_file, pack("f<f<f<", split(/ /,$triangle[0])));
-      push(@output_file, pack("f<f<f<", split(/ /,$triangle[2])));
-      push(@output_file, pack("f<f<f<", split(/ /,$triangle[3])));
-      push(@output_file, pack("f<f<f<", split(/ /,$triangle[4])));
-      push(@output_file, chr(0).chr(0));
-      @triangle=();
-      $numtris++;
-    }
-  }
-  close($fh);
-  if( substr($triangle[0], 0, 8) ne 'endsolid'){
-    print("  Expected STL termination not found. Corrupted input or not STL file?\n");
-    return;
-  }
-  print("  File read. Triangles: $numtris\n");
-  my $tempfile="$tmpfolder/$$-$counter.stl";
-  $counter++;
-  print("  Writing output via $tempfile\n");
-  my $header=substr('STL:'.$name.'                                                                                ', 0, 80);
-  unshift(@output_file, $header, pack("L<", $numtris));
-  open(FH, ">", "$tempfile") || return;
-  print FH @output_file;
-  close(FH);
-  if(-s $tempfile ne (($numtris * 50) + 84)){
-    unlink($tempfile);
-    print("  Error writing output. Permissions issue or out of space?");
-    return;
-  }
-  print("  STL file written.\n");
-  move($tempfile, $file);
-  unlink($tempfile);
-}
-
-############################################################
-# 
-# SUBROUTINES
-#
-####################
-
-########################################
-# Main subroutine and utilities
-####################
-
-# Main subroutine
-sub compressfile($%) {
-  my $file=$_[0];
-  my %options = %{$_[1]};
-  my $saving=0;
-  if ($file =~ m/[";`\n]/){
-    print("Skipping $file due to potential attempted exploit in filename.\n");
-    return;
-  }
-
-  # Used to determine if any improvement was actually achieved.
-  my $initialsize = -s $file;
-  if(!$initialsize){
-    print("Input file '$file' does not exist or has zero size.\n");
-    return;
-  }
-  if($options{'fix-ext'}){
-    $file=fix_proper_ext($file);
-  }
-
-  my $freespace=getfreespace();
-  if($freespace < $initialsize/256){
-    print("Possible insufficient free space on $tmpfolder - aborting. Will not attempt to process a file without 2x file size free. File $initialsize, free $freespace.\n");
-    return;
-  }
-
-  my $oldtime;
-  if($options{'keep-mod'}){
-     $oldtime=stat($file)->mtime;
-  }else{
-    $oldtime=time;
-  }
-  print("Attempting: $file:$initialsize\n");
-  my $ext=lc($file);
-  $ext=~s/^.*\.//;
-  if ($ext eq 'epub') {
-    # Every time you so much as open an epub in Calibre, it creates this.
-    system('zip', '-d',$file, 'META-INF/calibre_bookmarks.txt');
-  }
-  if($ext eq 'woff'){
-    process_woff($file);
-  }
-
-  if($ext eq 'mp3' ||
-     $ext eq 'mp4' ||
-     $ext eq 'webm'
-     #$ext eq 'avi' #After testing on a large collection of AVI files, including vintage ones, this does make many of them smaller - by about one-tenth of a percent. Not worth the effort.
-     ){
-    process_multimedia($file);
-  }
-
-  if($options{'audio'}){
-    if($ext eq 'mp3'){
-      $file=recode_audio($file);
-    }
-    if($options{'audio-agg'} &&
-      ($ext eq 'm4b')){
-      $file=recode_audio($file);
-    }
-    $ext=lc($file);
-    $ext=~s/^.*\.//;
-  }
-  if($ext eq 'tiff' || #This is the only handler for TIFF.
-     $ext eq 'tif' ||
-     $ext eq 'gif'){  #It also applies the first effort on optimising GIF, but better tools follow further down.{
-    generic_image_recode($file);
-  }
-  if ($ext eq 'gif') {
-    if( $options{'gif-png'} ) {
-      $file=agif2apng($file); #If successful, returns new name. Otherwise returns old name.
-      $ext=lc($file);
-      $ext=~s/^.*\.//;
-    }else{
-      compress_gif($file);
-    }
-  }
-
-  if (($ext eq 'pcx' ||
-      $ext eq 'bmp' ||
-      $ext eq 'tif' ||
-      $ext eq 'tiff')
-      && $options{'misc-png'}){
-    $file=img2png($file);
-    $ext=lc($file);
-    $ext=~s/^.*\.//;
-  }
-    
-  if ($options{'srr'}){
-    if(
-      ($ext eq 'png' && is_animated_png($file)==0) ||
-      ($ext eq 'webp' && is_animated_webp($file)==0) ||
-      $ext eq 'bmp'){
-      while(SRR_image($file)){};
-    }
-  }
-
-  if ($ext eq 'png') {
-    compress_png($file);
-    $options{'discard-meta'} && print("Processing with leanify") && leanify($file) && print(": Success\n");
-    if( $options{'png-webp'} ) {
-      $file=png2webp($file); #If successful, returns new name. Otherwise returns old name.
-      $ext=lc($file);
-      $ext=~s/^.*\.//;
-    }
-  }
- 
-  if ($ext eq 'jpg' || $ext eq 'jpeg' || $ext eq 'jfif') {
-    process_jpeg($file, $options{'discard-meta'});
-    leanify($file, $options{'discard-meta'});
-    if($options{'jpg-webp'}){
-      $file=jpeg2webp($file);
-      $ext=lc($file);
-      $ext=~s/^.*\.//;
-    }
-  }
-  
-  if ($ext eq 'ico' ||
-      $ext eq 'fb2') {
-    leanify($file);
-  }
-  if ($ext eq 'stl') {
-    process_stl($file);
-  }
-  if ($ext eq 'pdf') {
-    compress_pdf($file, $options{'discard-meta'});
-    pdfsizeopt($file) && pdfsizeopt($file, 1);
-  }
-  if ($ext eq 'flac') {
-    compress_flac($file);
-  }
-  if ($ext eq 'cab') {
-    compress_cab($file);
-  }
-  if ($ext eq 'html' ||
-      $ext eq 'htm') {
-    process_html($file);
-    optimise_base64_file($file);
-  }
-  if ($ext eq 'svg' ||
-      $ext eq 'css'){
-    optimise_base64_file($file);
-      $options{'discard-meta'} && leanify($file);
-  }
-  if ($ext eq 'jar') { #Not going to take these apart, too much risk of breaking things.
-    testcommand('advzip');
-    system('advzip', '-z4', '-q', $file);
-  }
-  if($ext eq 'gz' ||
-     $ext eq 'tgz' ){
-    testcommand('advdef');
-    system('advdef', '-z4', $file);
-  }
-  if($ext eq 'swf'){
-        `which minuimus_swf_helper `;
-    if( ! $?){
-      testcommand('jpegoptim');
-      system('minuimus_swf_helper', 'z', $file, $file);
-    }else{
-      print("Optional helper minuimus_swf_helper not found - skipping SWF file.\n");
-    }
-    leanify($file);
-  }
-
-  if($options{'video'} &&(
-    $ext eq 'avi' ||
-    $ext eq 'mpg' ||
-    $ext eq 'mpeg' ||
-    $ext eq 'ogm' ||
-    $ext eq 'mov' ||
-    $ext eq 'flv' ||
-    $ext eq 'ts' ||
-    ($ext eq 'mp4' && $options{'video-agg'})
-    )){
-    $file=processvideo($file);
-    $ext=lc($file);
-    $ext=~s/^.*\.//;
-  }
-
-  if ($ext eq 'docx' ||
-     $ext eq 'pptx' ||
-     $ext eq 'xlsx' ||
-     $ext eq 'zip' ||
-     $ext eq 'cbz' || #Comic book archive
-     $ext eq 'odt' || #OpenDocument
-     $ext eq 'ods' || #OpenDocument
-     $ext eq 'odp' || #OpenDocument
-     $ext eq 'epub'||
-     $ext eq 'xps' ||
-     $ext eq '7z' ||
-     ($ext eq 'cbr' && $options{'cbr-cbz'}) ||
-     ($ext eq 'rar' && $options{'rar-zip'}) ||
-     $options{"iszip-$ext"}){
-    $options{'recur-depth'} || return(0);
-    my $outtype='zip';
-    if($ext eq 'zip' && $options{'zip-7z'}){$outtype='7z'}
-    if($ext eq '7z' ){$outtype='7z'}
-    
-    my $ret=compress_zip($file,$outtype);
-    if($ret){
-      if($ret ne $file){
-        print("  New filename $ret\n");
-        $file=$ret;
-        $ext=lc($file);
-        $ext=~s/^.*\.//;
-      }
-    }else{
-      print("Archive processing failed.\n");
-    }
-  }
-
-  if($ext eq '7z' && $options{'7z-zpaq'}){
-    my $ret=compress_zip($file,'zpaq');
-    if($ret){
-      if($ret ne $file){
-        print("  New filename $ret\n");
-        $file=$ret;
-        $ext=lc($file);
-        $ext=~s/^.*\.//;
-      }
-    }else{
-      print("7z-zpaq conversion failed.\n");
-    }
-  }
-
-  if($ext eq 'rar' && $options{'rar-7z'}){
-    $options{'recur-depth'} || return(0);
-    my $ret=compress_zip($file,'7z');
-    if($ret){
-      if($ret ne $file){
-        print("  New filename $ret\n");
-        $file=$ret;
-        $ext=lc($file);
-        $ext=~s/^.*\.//;
-      }
-    }else{
-      print("Archive processing failed.\n");
-    }
-  }
-
-
-
-  if( $options{"omni-$ext"}){
-    my $ret=omnicompress($file);
-    if($ret){
-      if($ret ne $file){
-        print("  New filename $ret\n");
-        $file=$ret;
-        $ext=lc($file);
-        $ext=~s/^.*\.//;
-      }
-    }
-  }
-
-
-  my $finalsize= -s $file;
-  if(!$finalsize){
-    print("Minuimus most critical error encountered - data loss has resulted - aborting)! File was $file\n");
-    exit(255);
-  }
-  if ($initialsize ne $finalsize) {
-      my $rate=$finalsize/$initialsize;
-      print("  Success! $initialsize to $finalsize ($rate)\n");
-      utime($oldtime, $oldtime, $file);
-      $saving=1;
-  } else {
-    print("  No space saving achieved ($initialsize->$finalsize).\n");
-  }
-  return($saving);
-}
-
-sub processfolder(){
-  my $path=$_[0];
-  $path=~s/\n//;
-  if( -d $path){
-    print("Processing $path recursively.\n");
-    my $dh;
-    opendir($dh, $path);
-    my @dir_listing = readdir $dh;
-    closedir $dh;
-    for (@dir_listing){
-      if((substr($_, 0, 1) ne '.') &&
-         (substr($_, 0, 1) ne '$')){
-           push(@files, "$path/$_"); #Skip ., .. and hidden files.
-         }
-    }
-  }
-}
-
-sub testcommand($){
-  my $totest=$_[0];
-  if($testedcommands{$totest}){return;}
-  if("$^O" eq 'MSWin32'){
-    $totest=$totest.'.exe';
-    `where $totest`
-  }else{
-    `which $totest`;
-  }
-   if(! $?){
-    $testedcommands{$totest}=1;
-    return;
-  }
-  print("Minuimus requires $totest. Install dependency or 'make deps' and retry.\n");
-  exit(1);
-}
-
-sub testcommand_nonessential($){
-  my $totest=$_[0];
-  $nonessential_failed{$totest} && return(0);
-  if("$^O" eq 'MSWin32'){
-    $totest=$totest.'.exe';
-    `where $totest`;
-  }else{
-    `which $totest`;
-  }
-  if($?){
-    print("Program $totest requsted but not available. This is an optional dependency. It is not required for minuimus, but functionality is reduced without it.\n");
-    print("Installing $totest may enable more effective compression.\n");
-    $nonessential_failed{$totest} = 1;
-    return(0);
-  }else{
-    return(1);
-  }
-}
-
-sub getfreespace(){
-  if("$^O" eq 'MSWin32'){ #Absolutely hideous ugly hack.
-    return(1000000000000);
-  }
-  my @ret=`df -Pk "$tmpfolder/"`;
-
-  my @columns=split(' ', $ret[1]);
-  return($columns[3]);
-}
-
-# --verbose: Verbose option 
-sub printq(){
-  if($options{'verbose'}){
-    print($_);
-  }
-}
-# --check-deps: Checks installation status of given package
-sub depcheck($){
-  my $totest=$_[0];
-  if("$^O" eq 'MSWin32'){
-    `where $totest.exe /Q`;
-  }else{;
-    `which $totest`;
-  }
-   if(! $?){
-         print("✅/Y $totest\n");
-    return;
-  }
-  print("❌/N $totest\n");
-}
-# --fix-ext: Fix file extensions option
-sub fix_proper_ext($){
-  my $oldname=$_[0];
-  testcommand('file');
-  my $oldext=lc($oldname);
-  $oldext=~s/^.*\.//;
-  my $fileret=`file -b "$oldname"`;
-  my $newext;
-  # All these data times have something important in common: They are things that file never gets wrong.
-  # I have yet to encounter a false positive for any of them.
-  if(index($fileret, 'JPEG image data') == 0){
-    $newext='jpg';
-  } elsif(index($fileret, 'PNG image data,') == 0){
-    $newext='png';
-  } elsif(index($fileret, 'GIF image data,') == 0){
-    $newext='gif';
-  } elsif(index($fileret, 'PDF document, ') == 0){
-    $newext='pdf';
-  } elsif(index($fileret, 'TIFF image data') == 0){
-    $newext='tiff';
-  } elsif(index($fileret, 'WebM') != -1){
-    $newext='webm';
-  } elsif(index($fileret, 'RIFF (little-endian) data, Web/P image') == 0){
-    $newext='webp';
-  } elsif(index($fileret, 'Zip archive data') == 0){
-    if(lc($oldext) eq 'rar'){$newext = 'zip'}
-    if(lc($oldext) eq 'cbr'){$newext = 'cbz'}
-  } elsif((index($fileret, 'Composite Document File V2 Document,') == 0) &&
-          (index($fileret, ' Name of Creating Application: Microsoft Office Word,') != -1)){
-    $newext='doc';
-  }else{return($oldname)}
-  if(!$newext || (lc($oldext) eq $newext)){
-    return($oldname);
-  }
-  my $newname=substr($oldname, 0, length($oldname)-length($oldext)).$newext;
-  if(-e $newname){
-    print("  File has incorrect extension, but cannot be renamed as another file with the target name already exists.\n ($oldname, $newext)\n");
-    return($oldname);
-  }
-  move($oldname, $newname);
-  if(-f $newname){
-    print("  Ext-fix: $oldname, $newext\n");
-    return($newname);
-  }
-  print("  File has incorrect extension, but rename attempt failed for unclear reason.\n");
-  return($oldname);
-}
-
-########################################
-# Image Processing
-####################
-# Misc (multi-filetype)
-####################
-# --misc-png: BMP, PCX and TIFF to PNG conversion option; default within CBZ, CBR and CB7
-sub img2png(){
-  #Converts most images to PNG.
-  #But not GIFs. Well, it would do GIFs, but it wouldn't preserve their animation.
-  my $input_file=$_[0];
-  my $not_ext=substr($input_file, 0,rindex($input_file, '.')+1);
-  my $tempfile="$tmpfolder/$$-$counter.png";
-  $counter++;
-  my $newname=$not_ext.'png';
-  if(-e $newname){
-    print "  Cannot convert file: Output '$newname' exists.\n";
-    return($input_file);
-  }
-  testcommand($im_convert);
-  my $ret=system($im_convert, $input_file, $tempfile);
-  if($ret){
-    unlink($tempfile);
-    return($input_file);
-  }
-  $newname=$not_ext.'png';
-  print "  Converted '$input_file' to '$newname'\n";
-  move($tempfile, $newname);
-  if(! -f $newname){
-    print("  Conversion failed.\n");
-    unlink($tempfile);
-    return($input_file);
-  }
-  unlink($input_file);
-  return($newname);
-}
-# FB2, ICO, JPEG, SWF processor (PNG and SVG with --discard-meta option)
-sub leanify($){
-  # Leanify is powerful, but too aggressive on some filetypes for Minuimus.
-  # There's a reason minuimus's aggressive features are enabled by command line option.
-  # Excluded:
-  #   Archives: Minuimus does the same job
-  #   APK, JAR: Screws with signing
-  #   HTML: Minuimus does the same job
-  #   PNG: Removes metadata and (optipng + advpng) does the same job
-  #   SVG: Removes metadata
-  #   XML: Removes comments
-  # Included:
-  #   FB2, ICO, SWF
-  #   JPEG: I can't figure out what magic it uses, but it outdoes minuimus alone. (But it doesn't do the grey conversion: That's a minuimus-specific trick, no-one else thought of that!)
-
-  my $file=$_[0];
-  my $discard_meta=$_[1];
-  if(!testcommand_nonessential('leanify')){
-    return;
-  }
-
-  my $tempfile="$tmpfolder/$$-$counter.tmp";
-  $counter++;
-  copy($file, $tempfile);
-  if(! -f $tempfile){
-    die("  Failed when copying to $tmpfolder - possible permissions or free space issue. Terminating.");
-  }
-  my @leanify_parms = ('leanify', '-q');
-  if("$^O" ne 'MSWin32'){
-    push(@leanify_parms, '--keep-icc');
-  }
-  $discard_meta && push(@leanify_parms, '--keep-exif');
-  push(@leanify_parms, $file);
-  my $ret=system(@leanify_parms);
-  my $presize = -s $tempfile;
-  my $postsize = -s $file;
-  if(!$postsize && ("$^O" eq 'MSWin32')){
-    #Leanify on windows sometimes does something weird. I don't understand why. But after leanify runs, perl can't see the file any more.
-    #Has to be some really strange interaction between windows and unix permissions? Here's a dirty hack to fix it.
-    print("  Applying weird ugly hack that is only needed for leanify on windows.\n");
-    my $uglyfile="$tmpfolder/$$-$counter-uglyhack.tmp";
-    copy($file, $uglyfile);
-    if(-s $uglyfile){
-      print("    Hack seems to have worked. I feel dirty.\n");
-      my $file_slashed=$file;
-      $file_slashed =~ s/\//\\/g;
-      `del "$file_slashed"`; #Yes, it's that bad: unlink() doesn't work.
-      copy($uglyfile, $file);
-      $postsize = -s $file;      
-    }
-    unlink($uglyfile);
-  }  
-  if($ret || ($postsize > $presize) || (-s $file == 0)){
-    print("  Leanify appears to have gone wrong, restoring original file.\n  Return was $ret.");
-    unlink($file);
-    copy($tempfile, $file);
-  }
-  unlink($tempfile);
-  if($presize>$postsize){
-    printq("  Leanify achieved an additional saving ($presize->$postsize)\n");
-  }
-}
-# --srr: Selective resolution reduction option (PNG, WEBP, BMP)
-sub SRR_image(){
-  #Turns images into half-resolution, but only if doing so won't degrade the quality by any significant amount.
-  #Essentially it finds images which are of far higher resolution than they ought to be.
-  my $filename=$_[0];
-  my $ext=lc($filename);
-  $ext =~ s/.*\.//;
-  my $tmp_a="$tmpfolder/$$-$counter-A.png"; #Resized file
-  my $tmp_b="$tmpfolder/$$-$counter-B.raw"; #Re-resized file
-  my $tmp_c="$tmpfolder/$$-$counter-C.raw"; #Original file, in raw format
-  my $tmp_d="$tmpfolder/$$-$counter-D.$ext"; #The final resized file.
-  my @res=get_img_size($filename);
-  if(!$res[0]){
-    print("  Unable to determine image size for SRR. Possibly corrupt file.\n");
-    return(0);
-  }
-  my $newW=$res[0]/2;
-  my $newH=$res[1]/2;
-  if($newW==$res[0] ||
-     $newH==$res[1] ||
-     $res[0]==1 ||
-     $res[1]==1){
-     return(0); #This image is as small as it's getting.
-  }
-  my $r;
-  $r=system($im_convert, $filename, '-sample', $newW.'x'.$newH.'!', "$tmp_a");
-  if($r){printq("  SRR error 1\n");unlink($tmp_a);return(0);}
-  $r=system($im_convert, $tmp_a, '-sample', $res[0].'x'.$res[1].'!', "rgba:$tmp_b");
-  unlink($tmp_a);
-  if($r){printq("  SRR error 2\n");unlink($tmp_b);return(0);}
-
-  $r=system($im_convert, $filename, "rgba:$tmp_c");
-
-  if(-s $tmp_b != ($res[0]*$res[1]*4) ||
-     -s $tmp_c != ($res[0]*$res[1]*4)){
-    printq("  SRR error 3.\n");
-    unlink($tmp_b);unlink($tmp_c);
-    return(0);
-  }
-  open FILE1, "<:raw", $tmp_b;
-  open FILE2, "<:raw", $tmp_c;
-
-  my $byte1;
-  my $byte2;
-  for(my $c=0;$c<($res[0]*$res[1]*4);$c++){
-    read(FILE1, $byte1, 1);
-    read(FILE2, $byte2, 1);
-    if(abs(ord($byte1)-ord($byte2)) > 2){
-      close(FILE1);close(FILE2);
-      unlink($tmp_b);unlink($tmp_c);
-      #print("$filename: Not reducable.\n");
-      return(0);
-    }
-  }
-  close(FILE1);close(FILE2);
-  unlink($tmp_b);unlink($tmp_c);
-  my @final_command;
-  push(@final_command, $im_convert, $filename, '-sample', $newW.'x'.$newH.'!');
-  if($ext eq 'webp'){
-    push(@final_command, '-define', 'webp:lossless=true', '-define', 'webp:method=6');
-  }
-  push(@final_command, $tmp_d);
-  $r=system(@final_command);
-  $r && unlink($tmp_d);
-  -f $tmp_d || return(0);
-  if($ext eq 'png'){
-    compress_png($tmp_d);
-  }
-  if(-s $tmp_d < -s $filename){
-    print("  $filename: SRR successful, scaled to 1/2 size.\n");
-    move($tmp_d, $filename);
-    unlink($tmp_d);
-    return(1);
-  }else{
-    print("  SRR attempted, but no space saving was achieved.\n");
-    unlink($tmp_d);
-    return(0);
-  }
-}
-# is_animated_webp: --srr option utility
-sub is_animated_webp(){
-  #0: No
-  #1: Yes. Tends to return yes every time on imagemagick-created webp, because they are sloppy!
-  #-1:Error.
-  my $fileh;
-  my $a;my $b;my $c;
-  open($fileh, '<:raw', $_[0])||return(-1);
-  read($fileh, $a, 4);
-  seek($fileh, 12, SEEK_SET);
-  read($fileh, $b, 4);
-  read($fileh, $c, 1);
-  close($fileh);
-  ($a eq 'RIFF') || return(-1);
-  ($b eq 'VP8 ') && return(0);
-  ($b eq 'VP8L') && return(0);
-  ($b eq 'VP8X') || return(-1);
-  $c=ord($c) & 2;
-  $c && return(1);
-  return(0);
-}
-#get_img_size: --srr option utility
-sub get_img_size(){
-  my $file=$_[0];
-  testcommand($im_identify);
-  my $res=`$im_identify -ping -format "\%w \%h" "$file"`;
-  $res =~ s/\n//g;
-  my @splitres=split(/ /, $res);
-  if($? || !$res || !$splitres[0] || !$splitres[1]){
-    return(0);
-  }
-  return(@splitres);
-}
-
-####################
-# JPEG
-####################
-# JPEG processor: jpegoptim > jpegtran > leanify
-sub process_jpeg($$$){
-  my $file=$_[0];
-  my $copytype='all';
-  if($_[1]){ #A flag indicating that the file metadata may be discarded. Use when compressing a JPEG inside of another format.
-    $copytype='none';
-  }
-  my $ignoregrey=$_[2]; #Disables the greyscale image detection.
-  testcommand('jpegoptim');
-  my $ret=system('jpegoptim', '-T1', '--all-progressive', '-p', '-q', $file);
-  if($ret){
-    print "  Aborting processing of JPEG file. May be a damaged file or incorrect extension?\n";
-    return($file);
-  }
-
-
-  my $tempfile="$tmpfolder/greyconv-$$-$counter.jpg";
-  $counter++;
-  my $grey='';
-
-  if(("$^O" ne 'MSWin32') && testcommand_nonessential('jpegtran')){ #jpegtran on windows is a little different.
-    if(!$ignoregrey && fileisgrey($file)){
-      print "  JPEG is greyscale but encoded as color. Converting to true greyscale if this reduces usage.\n";
-      $grey='-grayscale';
-    }
-    `which jpegtran`;
-    if($?){
-      `jpegtran -optimize -progressive -copy $copytype $grey "$file" > $tempfile`;
-      my $before = -s $file;
-      my $after = -s $tempfile;
-      if($? || !$after ||$after >= $before){
-        unlink($tempfile);
-        return($file);
-      }
-      move($tempfile, $file);
-      unlink($tempfile);
-    }
-  }
-  return($file);
-}
-# fileisgrey: JPEG processor utility
-sub fileisgrey(){
-  my $file=$_[0];
-  testcommand_nonessential($im_identify) || return(0);
-  testcommand_nonessential($im_convert) || return(0);
-  my $desc=`$im_identify "$file"`;
-  if(!($desc =~ m/ 8-bit sRGB /)){
-    return(0);
-  }
-  my $pipe;
-  my $pid=open($pipe, '-|',"$im_convert \"$file\" rgb:-");
-  if(!$pid){
-    return(0);
-  }
-  binmode($pipe);
-    my $tot=0;
-  while(!eof($pipe)){
-    my $a;my $b;my $c;
-    my $check=read($pipe, $a, 1);
-    $check+=read($pipe, $b, 1);
-    $check+=read($pipe, $c, 1);
-    if(($check!=3) || ($a ne $b) || ($b ne $c)){
-      close($pipe);
-      return(0);
-    }
-    $tot++;
-  }
-  close($pipe);
-    if($tot < 192){
-    return(0);
-  }
-  return(1);
-}
-# --jpg-webp: Lossy conversion option; Rejected if file is <10% smaller 
-sub jpeg2webp(){
-  #This function is lossy, and so will only be used if the appropriate command-line option is given. It's not very lossy though. Tiny degredation.
-  my $input_file=$_[0];
-  my $tempfile="$tmpfolder/$$-$counter.png";
-  $counter++;
-  my $output_file=$input_file;
-  $output_file =~ s/\.jpg$/\.webp/i;
-  $output_file =~ s/\.jpeg$/\.webp/i;
-  if(($input_file eq $output_file) || -e $output_file){
-    return($input_file);
-  }
-  printq("  Attempting JPEG to WebP.\n");
-  testcommand('knusperli');
-  testcommand('cwebp');
-  my $ret=system('knusperli', $input_file, $tempfile);
-  if($ret || !(-f $tempfile)){
-    print("Error in knusperli.\n");
-    unlink($tempfile);
-    return($input_file);
-  }
-  $ret=system('cwebp', '-sharp_yuv', '-m', '6', '-q', '90', '-quiet', '-pass', '10', $tempfile, '-o', $output_file);
-  unlink($tempfile);
-  if($ret || !(-f $output_file)){
-    print("Error in cwebp.\n");
-    unlink($output_file);
-    return($input_file);
-  }
-  if((-s $output_file) > (-s $input_file)*0.9){
-    printq("    Not worth the quality loss.\n");
-    unlink($output_file);
-    return($input_file);
-  }
-  unlink($input_file);
-  return($output_file);
-}
-
-####################
-# PNG
-####################
-# PNG processor: optipng > advdef > pngout
-sub compress_png($) {
-  my $file=$_[0];
-  #$tested_png || test_png();
-  testcommand('optipng');
-  testcommand('advdef');
-  testcommand('advpng');
-
-  my $anim=is_animated_png($file);
-
-  if ($anim == -1){
-    # Maybe not a valid PNG file?
-    return;
-  }
-
-  print("  Processing with optipng");
-  system('optipng', '-quiet','-o6', '-nc', '-nb', $file);
-  print(": Done\n");
-
-  if ($anim) {
-    print("  Processing with advdef");
-    system('advdef', '-z4', '-q', $file);
-    print(": Done\n");
-  } else {
-    print("  Processing with advpng");
-    system('advpng', '-z4', '-q', $file);
-    print(": Done\n");
-    testcommand_nonessential('pngout') && system('pngout', $file);
-    print("  Processing with pngout");
-    print(": Done\n");
-  }
-}
-# is_animated_png: PNG processor utility
-sub is_animated_png() {
-  # Returns 1 if animated; 0 if not; -1 if not a valid PNG
-  my $file=$_[0];
-  if (! -f $file) {
-    return(-1);
-  }
-  testcommand('advpng');
-  my @chunks=`advpng -l "$file"`;
-
-  if ($?) {
-    return(-1);
-  }
-
-  for (@chunks) {
-    if (substr($_, 0, 4) eq 'acTL') {
-      return(1);
-    }
-  }
-
-  return(0);
-}
-# --png-webp: Lossless conversion option for static images only; Rejected if file is larger 
-sub png2webp(){
-  my $file=$_[0];
-  testcommand('cwebp');
-  my $anim=is_animated_png($file);
-  my $output_file=$file;
-  $output_file=~ s/\.png$/\.webp/i;
-
-  if ($anim != 0){
-    # Either animated, or not a PNG.
-    return($file);
-  }
-  print "Attempting png->webp conversion.\n";
-  if(-e $output_file){
-    print("  WEBP file exists already.\n");
-    return($file);
-  }
-  my $tempfile="$tmpfolder/$$-$counter.webp";
-  $counter++;
-  system('cwebp', $file, '-lossless', '-quiet', '-z', '9', '-metadata', 'all', '-o', $tempfile);
-  if($? || (! -f $tempfile)){
-    print("  cwebp failed.\n");
-    unlink($tempfile);
-    return($file);
-  }
-  my $before= -s $file;
-  my $after= -s $tempfile;
-  if($after >= $before){
-    printq("  No space saving from webp conversion. Unusual.\n");
-    unlink($tempfile);
-    return($file);
-  }
-
-  move($tempfile, $output_file);
-  if(-f $output_file){
-    print("Converted '$file' to '$output_file'\n");
-    unlink($file);
-    return($output_file);
-  }
-  return($file);
-}
-
-####################
-# TIFF and GIF
-####################
-# TIFF processor and GIF pre-processor: imagemagick; 
-sub generic_image_recode($){
-  #Uses imagemagick to convert an image file to its own type, while at the highest compression settings.
-  #There are better tools for PNG and JPEG. But not for TIFF. Still going to run this on PNGs, but only as a first-effort.
-  #It also works on GIF, though again, only as a first-effort before trying some other tools.
-  my $file=$_[0];
-  my $ext=lc($file);
-  $ext=~s/^.*\.//;
-  if($ext eq 'png'){
-    is_animated_png($file) && return(0);#Convert does not support animated PNG.
-  }
-  testcommand($im_convert);
-  my $tempfile="$tmpfolder/image-$$-$counter.$ext";
-  $counter++;
-  if($ext eq 'gif'){
-    system($im_convert, $file, $tempfile);
-  }elsif(($ext eq 'tif') || ($ext eq 'tiff')){
-    system($im_convert, $file, '-quality', '90', '-compress', 'zip', $tempfile);
-  }else{
-    system($im_convert, $file, '-quality', '95', $tempfile);
-  }
-  if($? || (-s $tempfile == 0)){unlink($tempfile);}
-  if(! -f $tempfile){
-    return(1);
-  }
-  if((-s $tempfile) < (-s $file)){
-    print("  generic_image_recode succeeded.\n");
-    unlink($file);
-    move($tempfile, $file);
-  }else{
-    unlink($tempfile);
-  }
-  return(0);
-}
-# GIF processor: gifsicle > flexigif
-sub compress_gif(){
-  my $file=$_[0];
-  testcommand('gifsicle');
-  my $tempfile="$tmpfolder/$$-$counter";
-  $counter++;
-  if (-e $tempfile) {
-    print "Gif compressor error 1\n";
-    return;
-  }
-  system('gifsicle', '-O3', $file, '-o', $tempfile);
-
-  if (! -f $tempfile) {
-    print "Gif compressor error 2\n";
-    return;
-  }
-
-  my $befores = -s $file;
-  my $afters = -s $tempfile;
-
-  if (! $afters) {
-    print "Gif compressor error 3\n";
-    return;
-  }
-
-  if ($afters < $befores) {
-    move($tempfile, $file);
-  }
-
-  if (-f $tempfile) {
-    unlink($tempfile);
-  }
-
-  $befores = -s $file;
-
-  if (!testcommand_nonessential('flexigif') || $befores>102400) {
-    # FlexiGIF is optional, mostly because it's not in the ubuntu apt-get repository.
-    return;
-  }
-
-  # It's also incredibly slow - so painfully slow that it's best skipped for
-  # large files, otherwise it could take all day - and that's not hyperbole.
-  system('flexigif', '-p', $file, $tempfile);
-
-  $afters = -s $tempfile;
-
-  if (! $afters) {
-    print "Gif compressor error 3b\n";
-    return;
-  }
-
-  if ($afters < $befores) {
-    move($tempfile, $file);
-  }
-
-  if (-f $tempfile) {
-    unlink($tempfile);
-  }
-}
-# --gif-png: GIF to aPNG conversion option
-sub agif2apng($) {
-  my $input_file=$_[0];
-  my $initialcwd;
-  if (substr($input_file, 0, 1) eq '/'){
-    $initialcwd=getcwd();
-    chdir('/');
-    $input_file=substr($input_file, 1);
-    #print("Patch: $input_file\n");
-  }
-  my $output_file=$input_file;
-  $output_file=~ s/\.gif$/\.png/i;
-  print("Converting $input_file to $output_file\n");
-  if(-e $output_file){
-    print("  Conversion failed: $output_file exists.\n");
-    return($input_file);
-  }
-  testcommand('gif2apng');
-  system('gif2apng', $input_file, $output_file);
-  if($initialcwd){
-    chdir($initialcwd);
-    $input_file='/'.$input_file;
-    $output_file='/'.$output_file;
-  }
-  if( $? && -f $output_file ){ unlink($output_file); }
-
-  if( -f $output_file ){
-    print("Gif $input_file converted.\n");
-    unlink($input_file);
-  }else{
-    print("Conversion failed.\n");
-    return($input_file);
-  }
-  compress_png($output_file);
-  return($output_file);
-}
-
-########################################
-# Audio/Video Processing
-####################
-# Video processor
 sub processvideo(){
   print "Processing video: $_\n";
   m/\"/ && return($_);
@@ -2380,10 +2237,12 @@ sub processvideo(){
   my @streams;
   for (split(/\n/, $ret)){
     if($_ =~ m/ +Stream #0:/){
-      push(@streams, substr($_, 14));
+      s/.* Stream #0//;
+      push(@streams, $_);
     }
   }
   my $keepaudio=0;
+  my $pixfmt=0;
   for (@streams){
     my $streamret=isstreamok($_);
     if($streamret==0){
@@ -2393,6 +2252,7 @@ sub processvideo(){
     if($streamret==2){
       $keepaudio=1;
     }
+    $pixfmt=get_pixfmt($_, $pixfmt);
   }
   print "  No troublesome streams found: Should be convertable.\n";
   my $newname=substr($oldname, 0, rindex($oldname, '.')).'.webm';
@@ -2424,18 +2284,21 @@ sub processvideo(){
   }
   my $tempfile="$tmpfolder/video$$-$counter.webm";
   $counter++;
-  my @args=('ffmpeg', '-i', $oldname, '-map', '0');  
-  my $subname=substr($oldname, 0, rindex($oldname, '.')).'.srt';
-  #  push(@args, '-strict', '-2');
+  my @args=('ffmpeg', '-i', $oldname);
+  my $subname=substr($oldname, 0, rindex($oldname, '.')).'.vtt';
+  if(! -f $subname){
+    $subname=substr($oldname, 0, rindex($oldname, '.')).'.srt';
+  }
 
   if(-f $subname){
-    print "  SRT subtitles found.\n";
-    push(@args, '-i', $subname);
+    print "  VTT/SRT subtitles found.\n";
+    push(@args, '-i', $subname, '-map', '1');
   }
+  push(@args, '-map', '0');
   if($keepaudio){
     print("  Keeping existing audio without reencode.\n");
     push(@args, '-c:a', 'copy');
-   }else{
+  }else{
     my $isnotmono=isnotmonoable($oldname); #See function for return values, as there are a lot of them.
     if($isnotmono == 2){ #Due to many revisions, this tree of logic has gotten a bit convoluted.
       #File has no audio tracks. Do nothing.
@@ -2447,23 +2310,35 @@ sub processvideo(){
       push(@args, '-codec:a', 'libopus', '-frame_duration', '60');
     }
   }
-  
-  push(@args, '-c:v', 'av1', '-lag-in-frames', '19', '-b:v', '0', '-tiles', '2x2', '-g', '600');
+#  $pixfmt='yuv420p10le';
+  if($pixfmt){
+    push(@args, '-pix_fmt', $pixfmt);
+  }
+#  push(@args, '-c:v', 'av1', '-lag-in-frames', '24', '-b:v', '0', '-tiles', '2x2', '-row-mt', '1','-g', '600');
+#  push(@args, '-cpu-used', '0'); #Nothing less than perfection!
+#  push(@args, '-cpu-used', '8'); #For testing purposes only.
+  push(@args, '-c:v', 'libsvtav1', '-preset', '3', '-svtav1-params', 'film-grain-denoise=0:tile-columns=2'); #As this is made to reencode ye olde divx-era video, grain is already lost.
   my $crf=29;
   if($options{'video-agg'}){$crf=34;}
   push(@args,  '-crf', $crf); #Default is 32, but going for a bit higher quality here.
                               #Remember the aim is to recompress ancient DivX/XVID/MPEG1/MPEG2.
                               #Even on a high quality setting, AV1 will hit a lower bitrate than those.
-  push(@args, '-vf', 'hqdn3d=0:0:2:2,nlmeans=s=1,mpdecimate=max=6:hi=384'); #A mild denoiser, followed by duplicate frame removal (Saves space and encoding time, mostly good on animation)
-                              #Denoising used very sparingly to take out some of the artifacts.
+  my $filters = 'hqdn3d=0:0:2:2,nlmeans=s=1,mpdecimate=max=6:hi=384';
+                              #A mild denoiser, followed by duplicate frame removal (Saves space and encoding time, mostly good on animation)
+                              #Denoising used very sparingly to take out some of the artifacts (We're dealing with old codecs, there will be plenty).
                               #Otherwise the old compression artifacts would interfere with AV1.
                               #Leading to reduced compression efficiency.
                               #These settings are very low though, anything more would be risky.
                               #Proper manual adjustment would do much better than this script.
                               #But this is automatic, so err on the side of too-weak.
-                              #Default for 'hi' is 768, but I found that caused visual stuttering.
-#  push(@args, '-cpu-used', '0'); #Nothing less than perfection!
-#  push(@args, '-cpu-used', '8'); #For testing purposes only.
+                              #Default for 'hi' is 768, but I found that caused stuttering.
+  my $antiego=0;
+  if($options{'vidmax_1080'}){$antiego=1080;} #Feature added in response to certain people who think that their true artistic masterpiece of pixel art can only be properly viewed in 4K.
+  if($antiego){
+    $filters = $filters.",scale=-1:'min($antiego,ih)'";
+    push(@args, '-sws_flags', 'lanczos+full_chroma_inp+full_chroma_int+accurate_rnd+bitexact');
+  }
+  push(@args, '-vf', $filters);
   my $oldname_shortened=$oldname;
   $oldname_shortened=~s/.*[\/\\]//;
   push(@args, '-metadata', 'encoded_from_name='.$oldname_shortened);
@@ -2475,18 +2350,18 @@ sub processvideo(){
     return($oldname);
   }
   push(@args, $tempfile);
-    print("  Full arguements: @args\n");
+  print("  Full arguements: @args\n");
   $ret=system(@args);
   if($ret){
     print("  Encode failed (Returned $ret).\n");
     unlink($tempfile);
   }
-  if(! -f $tempfile){
+  if((! -f $tempfile) || (! -s $tempfile)){
     print("  Encode failed.\n");
     return($oldname);
   }
   if(-s $tempfile >= -s $oldname){
-    print "  File got bigger. That was a waste of time. Deleting re-encoded video.\n";
+    print("  File got bigger. That was a waste of time. Deleting re-encoded video.\n    File:$oldname\n  Rename:$newname\n  Temp:$tempfile\n");
     unlink($tempfile);
     return($oldname);
   }
@@ -2503,134 +2378,7 @@ sub processvideo(){
   }
   return($newname);
 }
-# isstreamok: Video processor utility
-sub isstreamok(){ #These are the streams we are OK to mess with.
-  # This is a list of old, obsolete video codecs, those which I consider worthy of retirement.
-  # Some were historic in their day. I have fond memories of downloading movies in DivX when I was in school.
-  # But now they are old, and modern software often does not support them. Their day is past.
-  # Additionally, due to the intentionally limited codec support of WebM (For good reason that I shall not go into here),
-  # most audio tracks will need re-encoding to Opus and substitles to webvtt.
-  # If any codec is detected that is not on this list, re-encode will not be attempted.
-  # So it won't try to reencode a modern codec such as h264, and will not try to convert subtitles that cannot be converted to webvtt by ffmpeg.
-  m/: Audio: aac / && return(1);
-  m/: Audio: sipr / && return(1); #Ancient RealVideo format.
-  m/: Video: rv20 / && return(1); #Ancient RealVideo format.
-  m/: Video: mpeg4 / && return(1); #MPEG4 is a pretty broad family. Includes DivX and XviD.
-  m/: Audio: mp3[ ,][ (]/ && return(1); #Die you obsolete piece of junk!
-  m/: Audio: mp2[ ,]/ && return(1); #Unintuitively, not actually a predecessor to MP3: They were developed simutainously. Internal MPEG politics were involved.
-  m/: Video: mpeg1video[ ,]/ && return(1);
-  m/: Video: mpeg2video / && return(1);
-  m/: Video: indeo5 / && return(1);
-  m/: Video: mjpeg / && return(1);
-  m/: Audio: ac3 / && return(1);
-  m/: Video: msmpeg4v3 / && return(1); #Is this the old WMV?
-  m/: Audio: qdm2 / && return(1); #An audio codec used in old quicktime files.
-  m/: Video: svq3 / && return(1); #A video codec used in old quicktime files. Tends to be found alongside the above.
-  m/: Audio: vorbis[ ,]/ && return(2); #The 2 says to set audio to copy, not re-encode.
-  m/: Video: vp6f[ ,]/ && return(1); #Old codec from 2003, sometimes found in old FLV files.
-  m/: Video: flv1[ ,]/ && return(1); #Another codec from old FLV files.
-  m/: Subtitle: text/ && return(1); #ffmpeg can convert this into webvtt, the one format WebM allows.
-  ( m/: Video: h264 / && $options{'video-agg'}) && return(1);
-  return(0);
-}
-# MP3, MP4, WEBM processor
-sub process_multimedia($){
-  my $file=$_[0];
-  my $extension=lc($file);
-  $extension =~ s/.*\.//;
-  my $tempfile="$tmpfolder/$$-$counter.$extension";
-  $counter++;
-  testcommand('ffmpeg');
-  print("  Processing media file via $tempfile.\n");
-  my @args=('ffmpeg', '-loglevel', 'quiet', '-i', $file, '-map', '0', '-c', 'copy');
-  if($extension eq 'avi'){
-    testcommand('ffprobe');
-    my $ret=`ffprobe "$file" 2>&1`;
-    if(!$ret || $?){
-      print("  Unable to get streams - not a supported file?\n");
-      return;
-    }
-    if(index($ret, 'Video: mpeg4') != -1){
-      print("  AVI file with mpeg4. Adding mpeg4_unpack_bframes.\n");
-      push(@args, '-bsf:v', 'mpeg4_unpack_bframes');
-    }
-  }
-  my $audio=isnotmonoable($file);
-  if($audio == 8){
-      push(@args, '-an');
-  }
-  if($audio == 0){
-    print("  File contains mono audio as stereo. There is no way to fix this losslessly, it just indicates poor file authorship.\n");
-  }
-  push(@args, $tempfile);
-  print("  Full args: @args\n");  my $ret=system(@args);
-  if($ret){
-    print("  Possible error in file, will not attempt to process: $file\n");
-    unlink($tempfile);
-    return;
-  }
-  if(! -f $tempfile || (-s $tempfile < 1000)){
-    print("  Decode failed. File is likely to be corrupt: $file\n");
-    unlink($tempfile);
-    return;
-  }
-  my $oldsize = -s $file;
-  my $newsize = -s $tempfile;
-  if(($newsize / $oldsize) >0.99){ #Not worth it.
-    unlink($tempfile);
-    return;
-  }
-  my $in_len=get_media_len($file);
-  my $out_len=get_media_len($tempfile);
-  if(abs($in_len - $out_len) > 3){
-  print("  Length differs after transcode, possible damaged or malformed file: $file\n");
-    unlink($tempfile);
-    return;
-  }
-  move($tempfile, $file);
-  unlink($tempfile);
-}
-# FLAC processor: ffmpeg
-sub compress_flac(){
-  my $file=$_[0];
-  testcommand('flac');
-  #Reencode a FLAC file. There are two reasons for this:
-  # 1. Turning the compression settings up to eleven. Or at least as high possible without the compatibility issues that --lax would allow.
-  # 2. Some FLAC files will have been compressed using earlier, less-efficient versions of the encoder. So recompressing with a new version will make them smaller.
-  # 3. Occasionally (rarely) a mono file will be incorrectly and wastefully encoded as stereo.
-  my $tempfile="$tmpfolder/$$-$counter.flac";
-  $counter++;
-  my $isnotmono= !isnotmonoable($file);#Yes, double negative.
-  if($isnotmono){
-    testcommand('ffmpeg');
-    my $ret = system('ffmpeg', '-i', $file, '-ac', '1', $tempfile);
-    $ret && unlink($tempfile);
-    if(-f $tempfile){
-      if((-s $tempfile != 0) && (-s $tempfile < -s $file)){
-        print(" FLAC file converted to mono.\n");
-        move($tempfile, $file);
-      }
-      unlink($tempfile);
-    }
-    $tempfile="$tmpfolder/$$-$counter.flac";
-    $counter++;
-  }
-  system('flac', '-8', '-e', '-p', '-r', '0,8', '--totally-silent', $file, '-o', $tempfile); #The flac encoder is very helpful in this: Not only will it encode FLAC to FLAC, it also preserves all metadata while doing so!
-  if($? or !(-f $tempfile)){
-    unlink($tempfile);
-    print(" FLAC re-encode error: Possible corrupted file '$file'\n");
-    return;
-  }
-  if((-s $tempfile) >= (-s $file)){
-    unlink($tempfile);
-    print(" FLAC re-encode successful, but the file did not get smaller. Keeping original.\n");
-    return;
-  }
-  unlink($file);
-  move($tempfile, $file);
-  print(" FLAC re-encode successful.\n");
-}
-# --audio/--audio-agg:  Audio conversion option
+
 sub recode_audio($){
   my $file=$_;
   my $ext=lc($file);
@@ -2679,7 +2427,7 @@ sub recode_audio($){
   if($isnotmono == 8){
     print("  Skipping silent file.\n");
     return($file);
-  }  
+  }
   push(@args, '-codec:a', 'libopus', '-b:a', $rate.'k', '-frame_duration', '60');
   push(@args, '-metadata', 'encoded_from_name='.$oldname_shortened);
   push(@args, '-metadata', 'encoded_from_sha256='.getsha256($file));
@@ -2704,7 +2452,65 @@ sub recode_audio($){
   unlink($file);
   return($output_file);
 }
-# get_media_len: Audio/video processor utility
+
+sub process_multimedia($){
+  my $file=$_[0];
+  my $extension=lc($file);
+  $extension =~ s/.*\.//;
+  my $tempfile="$tmpfolder/$$-$counter.$extension";
+  $counter++;
+  testcommand('ffmpeg');
+  print("  Processing media file via $tempfile.\n");
+  my @args=('ffmpeg', '-loglevel', 'quiet', '-i', $file, '-map', '0', '-c', 'copy');
+  if($extension eq 'avi'){
+    testcommand('ffprobe');
+    my $ret=`ffprobe "$file" 2>&1`;
+    if(!$ret || $?){
+      print("  Unable to get streams - not a supported file?\n");
+      return;
+    }
+    if(index($ret, 'Video: mpeg4') != -1){
+      print("  AVI file with mpeg4. Adding mpeg4_unpack_bframes.\n");
+      push(@args, '-bsf:v', 'mpeg4_unpack_bframes');
+    }
+  }
+  my $audio=isnotmonoable($file);
+  if($audio == 8){
+      push(@args, '-an');
+  }
+  if($audio == 0){
+    print("  File contains mono audio as stereo. There is no way to fix this losslessly, it just indicates poor file authorship.\n");
+  }
+  push(@args, $tempfile);
+  print("  Full args: @args\n");
+  my $ret=system(@args);
+  if($ret){
+    print("  Possible error in file, will not attempt to process: $file\n");
+    unlink($tempfile);
+    return;
+  }
+  if(! -f $tempfile || (-s $tempfile < 1000)){
+    print("  Decode failed. File is likely to be corrupt: $file\n");
+    unlink($tempfile);
+    return;
+  }
+  my $oldsize = -s $file;
+  my $newsize = -s $tempfile;
+  if(($newsize / $oldsize) >0.99){ #Not worth it.
+    unlink($tempfile);
+    return;
+  }
+  my $in_len=get_media_len($file);
+  my $out_len=get_media_len($tempfile);
+  if(abs($in_len - $out_len) > 3){
+  print("  Length differs after transcode, possible damaged or malformed file: $file\n");
+    unlink($tempfile);
+    return;
+  }
+  move($tempfile, $file);
+  unlink($tempfile);
+}
+
 sub get_media_len(){
   my $fn=$_[0];
   testcommand('ffmpeg');
@@ -2717,7 +2523,6 @@ sub get_media_len(){
   return($3+(60*$2)+(60*60*$1));
 }
 
-# minigrep: Utility
 sub minigrep($){
   my $ret='';
   my @lines=split( /\n/,$_[0]);
@@ -2728,7 +2533,6 @@ sub minigrep($){
   return($ret);
 }
 
-# isnotmonoable: Audio/video processor utility
 sub isnotmonoable($){
   #Returns 0 if the file is a stereo file which contains mono audio.
   #Returns a non-zero value otherwise which indicates why the file is not a stereo file containing mono audio.
@@ -2819,19 +2623,445 @@ sub isnotmonoable($){
   return(0); #Mono audio in a stereo file. Inefficiency identified! This can be optimised.
 }
 
-# getsha256: Checksum utility for audio and video processing
-sub getsha256($){
-  my $makesha256 = Digest::SHA->new("sha256");
-  my $fh;
-  open($fh, '<', $_[0]);
-  $makesha256->addfile($fh);
-  close($fh);
-  return(lc($makesha256->hexdigest));
+sub get_pixfmt(){
+  #Counterintuitively, more bits can actually mean /better/ compression. For 'reasons.' It's about prediction accuracy, really. Also the filters work better.
+  if($_[1]){
+    return($_[1]);
+  }
+  if((index($_[0], 'yuv420p,') != -1) ||
+     (index($_[0], 'yuv420p(') != -1)){
+    print("  Converting to 10-bit video to allow for improved filtering.");
+    return('yuv420p10le');
+  }
 }
 
-############################################################
+sub isstreamok(){ #These are the streams we are OK to mess with.
+#This is a list of old, obsolete video codecs, those which I consider worthy of retirement.
+#Some were historic in their day. I have fond memories of downloading movies in DivX when I was in school.
+#But now they are old, and modern software often does not support them. Their day is past.
+#Additionally, due to the intentionally limited codec support of WebM (For good reason that I shall not go into here),
+#most audio tracks will need re-encoding to Opus and substitles to webvtt.
+#If any codec is detected that is not on this list, re-encode will not be attempted.
+#So it won't try to reencode a modern codec such as h264, and will not try to convert subtitles that cannot be converted to webvtt by ffmpeg.
+  m/: Audio: aac / && return(1);
+  m/: Audio: sipr / && return(1); #Ancient RealVideo format.
+  m/: Video: rv20 / && return(1); #Ancient RealVideo format.
+  m/: Video: mpeg4 / && return(1); #MPEG4 is a pretty broad family. Includes DivX and XviD.
+  m/: Audio: mp3[ ,][ (]/ && return(1); #Die you obsolete piece of junk!
+  m/: Audio: mp2[ ,]/ && return(1); #Unintuitively, not actually a predecessor to MP3: They were developed simutainously. Internal MPEG politics were involved.
+  m/: Video: mpeg1video[ ,]/ && return(1);
+  m/: Video: mpeg2video / && return(1);
+  m/: Video: indeo5 / && return(1);
+  m/: Video: mjpeg / && return(1);
+  m/: Audio: ac3 / && return(1);
+  m/: Video: msmpeg4v3 / && return(1); #Is this the old WMV?
+  m/: Audio: wmav2 / && return(1); #An obsolete Windows Media Audio format, probably.
+  m/: Audio: qdm2 / && return(1); #An audio codec used in old quicktime files.
+  m/: Video: svq3 / && return(1); #A video codec used in old quicktime files. Tends to be found alongside the above.
+  m/: Audio: vorbis[ ,]/ && return(2); #The 2 says to set audio to copy, not re-encode.
+  m/: Video: vp6f[ ,]/ && return(1); #Old codec from 2003, sometimes found in old FLV files.
+  m/: Video: flv1[ ,]/ && return(1); #Another codec from old FLV files.
+  m/: Subtitle: text/ && return(1); #ffmpeg can convert this into webvtt, the one format WebM allows.
+  ( m/: Video: h264 / && $options{'video-agg'}) && return(1);
+  return(0);
+}
+
+sub fix_proper_ext($){
+  my $oldname=$_[0];
+  testcommand('file');
+  my $oldext=lc($oldname);
+  $oldext=~s/^.*\.//;
+  my $fileret=`file -b "$oldname"`;
+  my $newext;
+  # All these data times have something important in common: They are things that file never gets wrong.
+  # I have yet to encounter a false positive for any of them.
+  if(index($fileret, 'JPEG image data') == 0){
+    $newext='jpg';
+  } elsif(index($fileret, 'PNG image data,') == 0){
+    $newext='png';
+  } elsif(index($fileret, 'GIF image data,') == 0){
+    $newext='gif';
+  } elsif(index($fileret, 'PDF document, ') == 0){
+    $newext='pdf';
+  } elsif(index($fileret, 'TIFF image data') == 0){
+    $newext='tiff';
+  } elsif(index($fileret, 'WebM') != -1){
+    $newext='webm';
+  } elsif(index($fileret, 'RIFF (little-endian) data, Web/P image') == 0){
+    $newext='webp';
+  } elsif(index($fileret, 'Zip archive data') == 0){
+    if(lc($oldext) eq 'rar'){$newext = 'zip'}
+    if(lc($oldext) eq 'cbr'){$newext = 'cbz'}
+  } elsif((index($fileret, 'Composite Document File V2 Document,') == 0) &&
+          (index($fileret, ' Name of Creating Application: Microsoft Office Word,') != -1)){
+    $newext='doc';
+  }else{return($oldname)}
+  if(!$newext || (lc($oldext) eq $newext)){
+    return($oldname);
+  }
+  my $newname=substr($oldname, 0, length($oldname)-length($oldext)).$newext;
+  if(-e $newname){
+    print("  File has incorrect extension, but cannot be renamed as another file with the target name already exists.\n ($oldname, $newext)\n");
+    return($oldname);
+  }
+  move($oldname, $newname);
+  if(-f $newname){
+    print("  Ext-fix: $oldname, $newext\n");
+    return($newname);
+  }
+  print("  File has incorrect extension, but rename attempt failed for unclear reason.\n");
+  return($oldname);
+}
+
+sub leanify($){
+  my $file=$_[0];
+  my $discard_meta=$_[1];
+  if(!testcommand_nonessential('leanify')){
+    return;
+  }
+  #Leanify is powerful, but a bit more intrusive than minuimus's defaults.
+  #There's a reason minuimus's more aggressive features all need to be enabled by command line option.
+  #So leanify is to be invoked upon certain formats only.
+  #Specifically, not upon APK or JAR (for it screws with signing), upon HTML (Because what it does, minuimus does already),
+  #Upon SVG (it removes metadata), upon archive files (Duplicates minuimus's own functions) or upon XML (deletes comments).
+  #Or PNG (Deletes metadata. Plus the things it does, optipng and advpng already did.)
+  #But it does work well at optimising JPEGs - and I really can't figure out what magic it's using, other than that it outdoes minuimus alone.
+  #(But doesn't do the grey conversion: That's a minuimus-specific trick, no-one else thought of that!)
+  #So basically: JPEG, SWF, ICO, FB2.
+  my $tempfile="$tmpfolder/$$-$counter.tmp";
+  $counter++;
+  copy($file, $tempfile);
+  if(! -f $tempfile){
+    die("  Failed when copying to $tmpfolder - possible permissions or free space issue. Terminating.");
+  }
+  my @leanify_parms = ('leanify', '-q');
+  if("$^O" ne 'MSWin32'){
+    push(@leanify_parms, '--keep-icc');
+  }
+  $discard_meta && push(@leanify_parms, '--keep-exif');
+  push(@leanify_parms, $file);
+  my $ret=system(@leanify_parms);
+  my $presize = -s $tempfile;
+  my $postsize = -s $file;
+  if(!$postsize && ("$^O" eq 'MSWin32')){
+    #Leanify on windows sometimes does something weird. I don't understand why. But after leanify runs, perl can't see the file any more.
+    #Has to be some really strange interaction between windows and unix permissions? Here's a dirty hack to fix it.
+    print("  Applying weird ugly hack that is only needed for leanify on windows.\n");
+    my $uglyfile="$tmpfolder/$$-$counter-uglyhack.tmp";
+    copy($file, $uglyfile);
+    if(-s $uglyfile){
+      print("    Hack seems to have worked. I feel dirty.\n");
+      my $file_slashed=$file;
+      $file_slashed =~ s/\//\\/g;
+      `del "$file_slashed"`; #Yes, it's that bad: unlink() doesn't work.
+      copy($uglyfile, $file);
+      $postsize = -s $file;      
+    }
+    unlink($uglyfile);
+  }
+  if($ret || ($postsize > $presize) || (-s $file == 0)){
+    print("  Leanify appears to have gone wrong, restoring original file.\n  Return was $ret.");
+    unlink($file);
+    copy($tempfile, $file);
+  }
+  unlink($tempfile);
+  if($presize>$postsize){
+    printq("  Leanify achieved an additional saving ($presize->$postsize)\n");
+  }
+}
+
+sub testcommand_nonessential($){
+  my $totest=$_[0];
+  $nonessential_failed{$totest} && return(0);
+  if("$^O" eq 'MSWin32'){
+    $totest=$totest.'.exe';
+    `where $totest`;
+  }else{
+    `which $totest`;
+  }
+  if($?){
+    print("Program $totest requsted but not available. This is an optional dependency. It is not required for minuimus, but functionality is reduced without it.\n");
+    print("Installing $totest may enable more effective compression.\n");
+    $nonessential_failed{$totest} = 1;
+    return(0);
+  }else{
+    return(1);
+  }
+}
+
+sub process_stl($){
+  my $file=$_[0];
+  my $fh;
+  open($fh, "<", "$file") || return;
+  local $_ = <$fh>;
+  s/[\r\n]//;
+
+  if(! m/^solid .*\n/){
+    close($fh);
+    return;
+  }
+  my ($name) = /^solid (.*?)$/msg;
+  print "Converting ASCII STL. Name: $name\n";
+  my $numtris=0;
+  my @triangle;
+  my @output_file;
+  #push(@output_file, "                                                                                ");
+  while(<$fh>){
+    s/ +/ /g;
+    s/^ *//g;
+    s/ *$//g;
+    s/\r//;
+    s/\n//;
+    push(@triangle, $_);
+    if( $_ eq 'endfacet' ){
+      if(@triangle != 7 ||
+         $triangle[1] ne 'outer loop' ||
+         $triangle[5] ne 'endloop' ||
+         $triangle[6] ne 'endfacet') {close($fh);return(0);}
+      $triangle[0] =~ s/[^0-9e -.]//g;
+      $triangle[0] =~ s/^[ e]*//g;
+      $triangle[2] =~ s/[^0-9e -.]//g;
+      $triangle[2] =~ s/^[ e]*//g;
+      $triangle[3] =~ s/[^0-9e -.]//g;
+      $triangle[3] =~ s/^[ e]*//g;
+      $triangle[4] =~ s/[^0-9e -.]//g;
+      $triangle[4] =~ s/^[ e]*//g;
+      push(@output_file, pack("f<f<f<", split(/ /,$triangle[0])));
+      push(@output_file, pack("f<f<f<", split(/ /,$triangle[2])));
+      push(@output_file, pack("f<f<f<", split(/ /,$triangle[3])));
+      push(@output_file, pack("f<f<f<", split(/ /,$triangle[4])));
+      push(@output_file, chr(0).chr(0));
+      @triangle=();
+      $numtris++;
+    }
+  }
+  close($fh);
+  if( substr($triangle[0], 0, 8) ne 'endsolid'){
+    print("  Expected STL termination not found. Corrupted input or not STL file?\n");
+    return;
+  }
+  print("  File read. Triangles: $numtris\n");
+  my $tempfile="$tmpfolder/$$-$counter.stl";
+  $counter++;
+  print("  Writing output via $tempfile\n");
+  my $header=substr('STL:'.$name.'                                                                                ', 0, 80);
+  unshift(@output_file, $header, pack("L<", $numtris));
+  open(FH, ">", "$tempfile") || return;
+  print FH @output_file;
+  close(FH);
+  if(-s $tempfile ne (($numtris * 50) + 84)){
+    unlink($tempfile);
+    print("  Error writing output. Permissions issue or out of space?");
+    return;
+  }
+  print("  Binary STL file written.\n");
+  move($tempfile, $file);
+  unlink($tempfile);
+}
+
+sub denormal_stl($){
+  if(!$options{'denormal-stl'}){
+    return(0);
+  }
+  my $file=$_[0];
+  my $fh_in;
+  print("  Denormaling $file\n");
+  open($fh_in, "<", "$file") || return(0);
+  binmode($fh_in);
+  my $header;
+  read($fh_in, $header, 80);
+  if(substr($header, 0, 6) eq "solid "){
+    print("    Probably an ASCII format STL. Expect this to fail with a size mismatch.\n");
+  }
+  my $tris;
+  read($fh_in, $tris, 4);
+  my $tris_dec=unpack("L<", $tris);
+  print("    Tris:$tris_dec. Header:$header\n");
+  if( -s $file != ($tris_dec * 50)+84){
+    print("    Incorrect file size. Either not an STL, or an STL that uses optional extensions. Either way, not risking altering it.\n");
+    close($fh_in);
+    return(0);
+  }
+  my $tempfile="$tmpfolder/$$-$counter.stl";
+  $counter++;
+  print("    Temp file $tempfile\n");
+  if(!open(FH_OUT, ">", "$tempfile")){
+    close($fh_in);
+    return(0);
+  }
+  $header =~ s/^solid /model /i; #I've found STLs that actually do this stupid thing, so might as well fix it.
+  binmode(FH_OUT);
+  print FH_OUT $header;
+  print FH_OUT $tris;
+  
+  my $n;
+  my $denormaled=0;
+  for($n=0;$n<$tris_dec;$n++){
+    my $t;
+    read($fh_in, $t, 12);
+    if($t ne "\0\0\0\0\0\0\0\0\0\0\0\0"){$denormaled=1;}
+    
+    print FH_OUT "\0\0\0\0\0\0\0\0\0\0\0\0";  
+    read($fh_in, $t, 12);
+    print FH_OUT $t;  
+    read($fh_in, $t, 12);
+    print FH_OUT $t;  
+    read($fh_in, $t, 12);
+    print FH_OUT $t;  
+    read($fh_in, $t, 2);
+    if($t ne "\0\0"){
+      print("    Found optional data on a file which should have none. This can't happen, ergo this is not a valid STL file.\n");
+      close($fh_in);
+      close(FH_OUT);
+      unlink($tempfile);
+      return(0);
+    }
+    print FH_OUT "\0\0";  
+  }
+  close($fh_in);
+  close(FH_OUT);
+  if($denormaled){
+    print("    Normal vertexes zeroed.\n");
+    my $asize = -s $tempfile;
+    my $bsize = -s $file;
+    if($bsize != $asize){
+      print("    Size mismatch processing STL, aborting. This error should not be possible.\n    Got $asize expected $bsize\n");
+      unlink($tempfile);
+      return(0);
+    }
+    move($tempfile, $file);
+  }else{
+    print("    Normal vertexes already zero. Nothing to optimise.\n");
+    unlink($tempfile);
+  }
+  return($denormaled);
+}
+
+sub SRR_image(){
+  #Selective resolution reduction.
+  #Turns images into half-resolution, but only if doing so won't degrade the quality by any significent amount.
+  #Essentially it finds images which are of far higher resolution than they ought to be.
+  my $filename=$_[0];
+  my $ext=lc($filename);
+  $ext =~ s/.*\.//;
+  my $tmp_a="$tmpfolder/$$-$counter-A.png"; #Resized file
+  my $tmp_b="$tmpfolder/$$-$counter-B.raw"; #Re-resized file
+  my $tmp_c="$tmpfolder/$$-$counter-C.raw"; #Original file, in raw format
+  my $tmp_d="$tmpfolder/$$-$counter-D.$ext"; #The final resized file.
+  my @res=get_img_size($filename);
+  if(!$res[0]){
+    print("  Unable to determine image size for SRR. Possibly corrupt file.\n");
+    return(0);
+  }
+  my $newW=$res[0]/2;
+  my $newH=$res[1]/2;
+  if($newW==$res[0] ||
+     $newH==$res[1] ||
+     $res[0]==1 ||
+     $res[1]==1){
+     return(0); #This image is as small as it's getting.
+  }
+  my $r;
+  $r=system(@im_converta, $filename, '-sample', $newW.'x'.$newH.'!', "$tmp_a");
+  if($r){printq("  SRR error 1\n");unlink($tmp_a);return(0);}
+  $r=system(@im_converta, $tmp_a, '-sample', $res[0].'x'.$res[1].'!', "rgba:$tmp_b");
+  unlink($tmp_a);
+  if($r){printq("  SRR error 2\n");unlink($tmp_b);return(0);}
+
+  $r=system(@im_converta, $filename, "rgba:$tmp_c");
+
+  if(-s $tmp_b != ($res[0]*$res[1]*4) ||
+     -s $tmp_c != ($res[0]*$res[1]*4)){
+    printq("  SRR error 3.\n");
+    unlink($tmp_b);unlink($tmp_c);
+    return(0);
+  }
+  open FILE1, "<:raw", $tmp_b;
+  open FILE2, "<:raw", $tmp_c;
+
+  my $byte1;
+  my $byte2;
+  for(my $c=0;$c<($res[0]*$res[1]*4);$c++){
+    read(FILE1, $byte1, 1);
+    read(FILE2, $byte2, 1);
+    if(abs(ord($byte1)-ord($byte2)) > 2){
+      close(FILE1);close(FILE2);
+      unlink($tmp_b);unlink($tmp_c);
+      #print("$filename: Not reducable.\n");
+      return(0);
+    }
+  }
+  close(FILE1);close(FILE2);
+  unlink($tmp_b);unlink($tmp_c);
+  my @final_command;
+  push(@final_command, @im_converta, $filename, '-sample', $newW.'x'.$newH.'!');
+  if($ext eq 'webp'){
+    push(@final_command, '-define', 'webp:lossless=true', '-define', 'webp:method=6');
+  }
+  push(@final_command, $tmp_d);
+  $r=system(@final_command);
+  $r && unlink($tmp_d);
+  -f $tmp_d || return(0);
+  if($ext eq 'png'){
+    compress_png($tmp_d);
+  }
+  if(-s $tmp_d < -s $filename){
+    print("  $filename: SRR successful, scaled to 1/2 size.\n");
+    move($tmp_d, $filename);
+    unlink($tmp_d);
+    return(1);
+  }else{
+    print("  SRR attempted, but no space saving was achieved.\n");
+    unlink($tmp_d);
+    return(0);
+  }
+}
+
+sub is_animated_webp(){
+  #0: No
+  #1: Yes. Tends to return yes every time on imagemagick-created webp, because they are sloppy!
+  #-1:Error.
+  my $fileh;
+  my $a;my $b;my $c;
+  open($fileh, '<:raw', $_[0])||return(-1);
+  read($fileh, $a, 4);
+  seek($fileh, 12, SEEK_SET);
+  read($fileh, $b, 4);
+  read($fileh, $c, 1);
+  close($fileh);
+  ($a eq 'RIFF') || return(-1);
+  ($b eq 'VP8 ') && return(0);
+  ($b eq 'VP8L') && return(0);
+  ($b eq 'VP8X') || return(-1);
+  $c=ord($c) & 2;
+  $c && return(1);
+  return(0);
+}
+
+sub get_img_size(){
+  my $file=$_[0];
+  testcommand($im_identify);
+  my $res;
+  if($im_mode==1){
+    $res=`$im_identify identify -ping -format "\%w \%h" "$file"`;
+  }else{
+    $res=`$im_identify -ping -format "\%w \%h" "$file"`;
+  }
+  $res =~ s/\n//g;
+  my @splitres=split(/ /, $res);
+  if($? || !$res || !$splitres[0] || !$splitres[1]){
+    return(0);
+  }
+  return(@splitres);
+}
+
+sub printq(){
+  if($options{'verbose'}){
+    print($_);
+  }
+}
+
 # Abandoned ideas:
 # - Arithmetic coded JPEG. Great idea in principle, but hardly anything reads them! This is a great shame, and a prime example of how software patents can harm everyone.
 # - Use of LZW or bzip2 in ZIP files. Same problem again: The ZIP standard supports them, but in practice almost every ZIP-reading program and library doesn't.
 # - defluff. Optimises deflate even better than Zopfli, though it's very close. But it appears to be abandoned by the developer. No source code. Same for DeflOpt, kzip.
-####################
