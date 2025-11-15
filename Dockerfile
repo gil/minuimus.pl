@@ -29,6 +29,7 @@ echo "**** install required and optional packages ****" && \
  jbig2dec \
  jpegoptim \
  libjpeg-progs \
+ libtiff-tools \
  lzip \
  mupdf-tools \
  optipng \
