@@ -17,25 +17,7 @@ Two branches exist:
 
 For a list of my changes see [below](#changes)
 
-# minuimus.pl
-- [minuimus.pl](#minuimuspl)
-    - [Supported File Types](#supported-file-types)
-    - [Command Line Options](#command-line-options)
-    - [Dependencies](#dependencies)
-    - [Changes](#changes)
-
-Minuimus is a file optimizer utility script written in Perl. By default, it can be pointed to a file and it will transparently reduce the file size, leaving all pixels/text/audio/metadata intact. Using command line options, it can also run lossy optimizations and conversions.
-
-As well as using it's own methods and four optional supporting binaries, Minuimus is dependent on many established utilities. 
-It automates the process of calling all of these utilities—including recursively processing and reassembling container files (such as `ZIP`, `EPUB` and `DOCX`), detecting and handling any errors, and running integrity checks on the optimized files to prevent data loss. 
-Based on which dependencies are installed, Minuimus will process files the best it can, and skip those that have no compatible tool installed.
-
-As is the case for any optimizer, the size reduction achieved by Minuimus is highly dependent upon the input data. Even after extensive testing, the results are too inconsistent to easily quantify. Despite that, here are some examples:
-- A collection of PDF files sampled from the-eye.eu was reduced by 10%
-- A 500GB sample from the archive.org 'computermagazine' collection was reduced by 22%
-- A collection of ePub files from Project Gutenberg was reduced by 5%, as these files are light on images, and ZIP files with no optimizable files inside are reduced only slightly, by about 3%
-
-### Quick Start
+# Quick Start
 
 Build the docker image:
 
@@ -55,6 +37,24 @@ You can also create an alias to make it easier to run:
 ```bash
 alias minuimus="docker run --rm -it -v "$PWD":/data -w /data minuimus"
 ```
+
+# minuimus.pl
+- [minuimus.pl](#minuimuspl)
+    - [Supported File Types](#supported-file-types)
+    - [Command Line Options](#command-line-options)
+    - [Dependencies](#dependencies)
+    - [Changes](#changes)
+
+Minuimus is a file optimizer utility script written in Perl. By default, it can be pointed to a file and it will transparently reduce the file size, leaving all pixels/text/audio/metadata intact. Using command line options, it can also run lossy optimizations and conversions.
+
+As well as using it's own methods and four optional supporting binaries, Minuimus is dependent on many established utilities. 
+It automates the process of calling all of these utilities—including recursively processing and reassembling container files (such as `ZIP`, `EPUB` and `DOCX`), detecting and handling any errors, and running integrity checks on the optimized files to prevent data loss. 
+Based on which dependencies are installed, Minuimus will process files the best it can, and skip those that have no compatible tool installed.
+
+As is the case for any optimizer, the size reduction achieved by Minuimus is highly dependent upon the input data. Even after extensive testing, the results are too inconsistent to easily quantify. Despite that, here are some examples:
+- A collection of PDF files sampled from the-eye.eu was reduced by 10%
+- A 500GB sample from the archive.org 'computermagazine' collection was reduced by 22%
+- A collection of ePub files from Project Gutenberg was reduced by 5%, as these files are light on images, and ZIP files with no optimizable files inside are reduced only slightly, by about 3%
 
 ### Supported File Types
 All processing is only saved to disk if the processed file is smaller and changes are transparent.
