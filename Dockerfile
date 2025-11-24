@@ -1,31 +1,36 @@
 FROM debian:stable-slim
 
+# Use local checkout as build source
+COPY . /tmp/minuimus-src
+
 RUN \
 echo "************************************************************" && \
 echo "****  update and install build packages ****" && \
 apt-get update -qy && \
-apt-get install -qy --no-install-recommends \
+ apt-get install -qy --no-install-recommends \
  bazel-bootstrap \
+ ca-certificates \
  curl \
  g++ \
  gcc \
  git \
+ unzip \
  zlib1g-dev \
+ libpng-dev \
  make \
  wget && \
 echo "************************************************************" && \
 echo "**** install required and optional packages ****" && \
  apt-get install -qy --no-install-recommends \
- advancecomp \ 
+ advancecomp \
  brotli \
  bzip2 \
  cabextract \
  ffmpeg \
  file \
  flac \
- gif2apng \
  gifsicle \
- imagemagick-6.q16 \
+ imagemagick \
  jbig2dec \
  jpegoptim \
  libjpeg-progs \
@@ -45,11 +50,7 @@ echo "**** install required and optional packages ****" && \
  zpaq && \
 echo "************************************************************" && \
 echo "**** compile minuimus and extras ****" && \
-mkdir -p /tmp/minuimus-src && \
-wget -O /tmp/minuimus-src/minuimus.pl-main.zip https://github.com/Wdavery/minuimus.pl/archive/refs/heads/main.zip && \
 cd /tmp/minuimus-src && \
-unzip /tmp/minuimus-src/minuimus.pl-main && \
-cd /tmp/minuimus-src/minuimus.pl-main && \
 make install && \
 rm -r /tmp/minuimus-src && \
 echo "************************************************************" && \
@@ -60,6 +61,15 @@ wget -O /tmp/flexigif-src/flexigif https://create.stephan-brumme.com/flexigif-lo
 mv flexigif /usr/bin/flexigif && \
 chmod +x /usr/bin/flexigif && \
 rm -r /tmp/flexigif-src && \
+echo "************************************************************" && \
+echo "**** compile gif2apng ****" && \
+mkdir -p /tmp/gif2apng-src && \
+cd /tmp/gif2apng-src && \
+wget -O gif2apng.zip "https://master.dl.sourceforge.net/project/gif2apng/1.9/gif2apng-1.9-src.zip?viasf=1" && \
+unzip gif2apng.zip && \
+make && \
+mv gif2apng /usr/bin/gif2apng && \
+rm -r /tmp/gif2apng-src && \
 echo "************************************************************" && \
 echo "**** install pdfsizeopt, pngout, jbig2 and dependencies ****" && \
 mkdir /var/opt/pdfsizeopt && \
@@ -114,7 +124,9 @@ apt-get purge -qy \
  g++ \
  gcc \
  git \
+ unzip \
  zlib1g-dev \
+ libpng-dev \
  make \
  wget && \
 apt-get autoremove -qy && \
