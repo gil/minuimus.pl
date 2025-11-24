@@ -35,6 +35,27 @@ As is the case for any optimizer, the size reduction achieved by Minuimus is hig
 - A 500GB sample from the archive.org 'computermagazine' collection was reduced by 22%
 - A collection of ePub files from Project Gutenberg was reduced by 5%, as these files are light on images, and ZIP files with no optimizable files inside are reduced only slightly, by about 3%
 
+### Quick Start
+
+Build the docker image:
+
+```bash
+docker build -t minuimus .
+docker run --rm -it minuimus --check-deps
+```
+
+Compress a file:
+
+```bash
+docker run --rm -it -v "$PWD":/data -w /data minuimus --discard-meta somefile.pdf
+```
+
+You can also create an alias to make it easier to run:
+
+```bash
+alias minuimus="docker run --rm -it -v "$PWD":/data -w /data minuimus"
+```
+
 ### Supported File Types
 All processing is only saved to disk if the processed file is smaller and changes are transparent.
 - `7Z` archives are extracted and files within processed, then recompressed using both LZMA and PPMd algorithms on highest practical settings. Whichever file is smallest is kept, unless the original file is smaller. Solid compression is not used

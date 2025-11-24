@@ -134,3 +134,4 @@ rm -rf /var/lib/apt/lists/* && \
 cat
 
 VOLUME /data
+ENTRYPOINT ["minuimus.pl"]
