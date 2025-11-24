@@ -36,6 +36,7 @@ You can also create an alias to make it easier to run:
 
 ```bash
 alias minuimus="docker run --rm -it -v "$PWD":/data -w /data minuimus"
+minuimus --discard-meta somefile.pdf
 ```
 
 # minuimus.pl
