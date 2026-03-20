@@ -63,8 +63,8 @@ echo "**** install flexiGIF ****" && \
 mkdir -p /tmp/flexigif-src && \
 cd /tmp/flexigif-src && \
 wget -O /tmp/flexigif-src/flexigif https://create.stephan-brumme.com/flexigif-lossless-gif-lzw-optimization/flexiGIF.2018.11a && \
-mv flexigif /usr/bin/flexigif && \
-chmod +x /usr/bin/flexigif && \
+mv flexigif /usr/bin/flexiGIF && \
+chmod +x /usr/bin/flexiGIF && \
 rm -r /tmp/flexigif-src && \
 echo "************************************************************" && \
 echo "**** compile gif2apng ****" && \
