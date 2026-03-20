@@ -16,6 +16,7 @@ apt-get update -qy && \
  unzip \
  zlib1g-dev \
  libpng-dev \
+ libjpeg-dev \
  make \
  wget && \
 echo "************************************************************" && \
@@ -112,6 +113,22 @@ CC=gcc bazel build :knusperli && \
 mv bazel-bin/knusperli /usr/bin/knusperli && \
 rm -r /tmp/knusperli-src && \
 echo "************************************************************" && \
+echo "**** compile jpeg2png ****" && \
+mkdir -p /tmp/jpeg2png-src && \
+cd /tmp/jpeg2png-src && \
+wget -O jpeg2png.zip https://github.com/victorvde/jpeg2png/archive/refs/heads/master.zip && \
+unzip jpeg2png.zip && \
+rm jpeg2png.zip && \
+cd jpeg2png-master && \
+if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+  SHELL=/bin/sh CC=gcc make; \
+else \
+  sed -i 's/-msse2 -mfpmath=sse//' Makefile && \
+  SHELL=/bin/sh CC=gcc make SIMD=0; \
+fi && \
+mv jpeg2png /usr/bin/jpeg2png && \
+rm -r /tmp/jpeg2png-src && \
+echo "************************************************************" && \
 echo "**** compile imgdataopt ****" && \
 mkdir -p /tmp/imgdataopt && \
 cd /tmp/imgdataopt && \
@@ -132,6 +149,7 @@ apt-get purge -qy \
  unzip \
  zlib1g-dev \
  libpng-dev \
+ libjpeg-dev \
  make \
  wget && \
 apt-get autoremove -qy && \
