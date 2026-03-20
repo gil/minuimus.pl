@@ -22,7 +22,7 @@ For a list of my changes see [below](#changes)
 Build the docker image:
 
 ```bash
-docker build -t minuimus .
+docker build -t minuimus --progress=plain --no-cache .
 docker run --rm -it minuimus --check-deps
 ```
 
@@ -38,6 +38,14 @@ You can also create an alias to make it easier to run:
 alias minuimus="docker run --rm -it -v "$PWD":/data -w /data minuimus"
 minuimus --discard-meta somefile.pdf
 ```
+
+Or more complex things, such as compressing many comics all at once in parallel:
+
+```
+OLD_TOTAL="$( du -Ah . )" ; time caffeinate -dmi bash -c 'find . -print0 -type f \( -iname "*.pdf" -o -iname "*.cbz" -o -iname "*.cbr" \) | xargs -0 -P $(( $(getconf _NPROCESSORS_ONLN) / 2 )) -n 1 docker run --init --rm --entrypoint="" -v "$PWD":/data -w /data minuimus timeout -k 60 3600 /usr/bin/minuimus.pl' ; printf "\nBefore:\n$OLD_TOTAL\n\nNow:\n$( du -Ah . )"
+```
+
+`caffeinate` will make sure Mac won't sleep, `_NPROCESSORS_ONLN` is used to run in parallel taking half of available processors and there's a timeout of 1h in case some file takes too long.
 
 # minuimus.pl
 - [minuimus.pl](#minuimuspl)
