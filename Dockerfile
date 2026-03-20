@@ -8,7 +8,6 @@ echo "************************************************************" && \
 echo "****  update and install build packages ****" && \
 apt-get update -qy && \
  apt-get install -qy --no-install-recommends \
- bazel-bootstrap \
  ca-certificates \
  curl \
  g++ \
@@ -19,6 +18,12 @@ apt-get update -qy && \
  libpng-dev \
  make \
  wget && \
+echo "************************************************************" && \
+echo "**** install bazelisk ****" && \
+ARCH=$(dpkg --print-architecture) && \
+if [ "$ARCH" = "amd64" ]; then BAZELISK_ARCH="amd64"; else BAZELISK_ARCH="arm64"; fi && \
+wget -O /usr/local/bin/bazel https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-${BAZELISK_ARCH} && \
+chmod +x /usr/local/bin/bazel && \
 echo "************************************************************" && \
 echo "**** install required and optional packages ****" && \
  apt-get install -qy --no-install-recommends \
@@ -118,8 +123,8 @@ mv imgdataopt /usr/bin/imgdataopt && \
 rm -r /tmp/imgdataopt && \
 echo "************************************************************" && \
 echo "**** Cleanup ****" && \
+rm -f /usr/local/bin/bazel && \
 apt-get purge -qy \
- bazel-bootstrap \
  curl \
  g++ \
  gcc \
