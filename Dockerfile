@@ -80,9 +80,12 @@ echo "************************************************************" && \
 echo "**** install pdfsizeopt, pngout, jbig2 and dependencies ****" && \
 mkdir /var/opt/pdfsizeopt && \
 cd /var/opt/pdfsizeopt  && \
-wget -O pdfsizeopt_libexec_linux.tar.gz https://github.com/pts/pdfsizeopt/releases/download/2017-01-24/pdfsizeopt_libexec_linux-v3.tar.gz && \
+wget -O pdfsizeopt_libexec_linux.tar.gz https://github.com/pts/pdfsizeopt/releases/download/2023-04-18/pdfsizeopt_libexec_linux-v9.tar.gz && \
 tar xzvf pdfsizeopt_libexec_linux.tar.gz && \
 rm -f pdfsizeopt_libexec_linux.tar.gz && \
+wget -O pdfsizeopt_libexec_linux_v3.tar.gz https://github.com/pts/pdfsizeopt/releases/download/2017-01-24/pdfsizeopt_libexec_linux-v3.tar.gz && \
+tar xzvf pdfsizeopt_libexec_linux_v3.tar.gz pdfsizeopt_libexec/png22pnm && \
+rm -f pdfsizeopt_libexec_linux_v3.tar.gz && \
 ln pdfsizeopt_libexec/pngout /usr/bin/pngout && \
 ln pdfsizeopt_libexec/jbig2 /usr/bin/jbig2 && \
 ln pdfsizeopt_libexec/png22pnm /usr/bin/png22pnm && \
