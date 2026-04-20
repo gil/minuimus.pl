@@ -1,7 +1,7 @@
 FROM debian:stable-slim
 
 # Use local checkout as build source
-COPY . /tmp/minuimus-src
+COPY src/ /tmp/minuimus-src
 
 RUN \
 echo "************************************************************" && \
