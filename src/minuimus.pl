@@ -2,7 +2,7 @@
 
 
 #Minuimus is released under the GPL v3, including the supporting programs written in C.
-#It is written by Codebird, AKA CorvusRidiculissimus on Reddit.
+#It is written by Codebird, who goes by many names, but must maintain separation between them due to working in a sensitive occupation.
 
 
 
@@ -86,6 +86,7 @@ if($options{'help'}){
         "--discard-meta  Discards metadata from image and PDF files. It only deletes the XML-based metadata, so the title remains\n",
         "--fix-ext       Detects some common file types with the wrong extension, and corrects\n",
         "--gif-png       Converts GIF files to PNG, including animated GIF to animated PNG. Likely results in a smaller file\n",
+        "--gif-webp       Converts GIF files to WebP, including animated GIF to animated WebP. Almost always results in a smaller file\n",
         "--iszip-<ext>   Forces a specified extension to be processed as a ZIP file\n",
         "--jpg-webp-cbz  Enables --jpg-webp when processing CBZ files. The space saving can be considerable, justifying the very slight quality loss\n",
         "--webp-in-cbz   Convert PNG files within CBZ to WEBP. Results in substantial savings, but poor compatibility - some viewers wont open them\n",
@@ -105,7 +106,7 @@ if($options{'help'}){
 }
 
 if($options{'version'}){
-  print("Minuimus.pl - version 4.1 (2023 September)\n",
+  print("Minuimus.pl - version 4.2 (2026 Febuary)\n",
         "Written by Codebird\n",
         "Additional changes by Wdavery\n");
   exit(0);
@@ -236,6 +237,7 @@ sub compressfile($%) {
   }else{
     $oldtime=time;
   }
+  
   print("Attempting: $file:$initialsize\n");
   my $ext=lc($file);
   $ext=~s/^.*\.//;
@@ -255,6 +257,10 @@ sub compressfile($%) {
     process_multimedia($file);
   }
 
+  if($ext eq 'mp3'){
+    MP3Packer_Wrapper($file);
+  }
+  
   if($options{'audio'}){
     if($ext eq 'mp3'){
       $file=recode_audio($file);
@@ -270,7 +276,11 @@ sub compressfile($%) {
     generic_image_recode($file);
   }
   if ($ext eq 'gif') {
-    if( $options{'gif-png'} ) {
+    if( $options{'gif-webp'} ) {
+      $file=agif2webp($file); #If successful, returns new name. Otherwise returns old name.
+      $ext=lc($file);
+      $ext=~s/^.*\.//;
+    }elsif( $options{'gif-png'} ){
       $file=agif2apng($file); #If successful, returns new name. Otherwise returns old name.
       $ext=lc($file);
       $ext=~s/^.*\.//;
@@ -282,6 +292,10 @@ sub compressfile($%) {
   if ($ext eq 'tif' ||
       $ext eq 'tiff'){
       process_tiff($file);
+  }
+  
+  if($ext eq 'chd'){
+    optimise_chd($file)
   }
 
   if (($ext eq 'pcx' ||
@@ -348,7 +362,7 @@ sub compressfile($%) {
   }
   if ($ext eq 'html' ||
       $ext eq 'htm') {
-    process_html($file);
+    while(process_html($file)){};
     optimise_base64_file($file);
   }
   if ($ext eq 'svg' ||
@@ -385,11 +399,15 @@ sub compressfile($%) {
     $ext eq 'mov' ||
     $ext eq 'flv' ||
     $ext eq 'ts' ||
-    ($ext eq 'mp4' && $options{'video-agg'})
+    (($ext eq 'mp4' || $ext eq 'mkv') && $options{'video-agg'})
     )){
-    $file=processvideo($file);
-    $ext=lc($file);
-    $ext=~s/^.*\.//;
+    my $ret=processvideo($file);
+    if($ret ne $file){
+      print("  New filename $ret\n");
+      $file=$ret;
+      $ext=lc($file);
+      $ext=~s/^.*\.//;
+    }
   }
 
   if ($ext eq 'docx' ||
@@ -471,6 +489,7 @@ sub compressfile($%) {
     print("Minuimus most critical error encountered - data loss has resulted - aborting)! File was $file\n");
     exit(255);
   }
+
   if ($initialsize != $finalsize) {
       my $rate=$finalsize/$initialsize;
       print("  Success! $initialsize to $finalsize ($rate)\n");
@@ -512,6 +531,10 @@ sub process_jpeg($$$){
       `jpegtran -optimize -progressive -copy $copytype $grey "$file" > $tempfile`;
     }else{
       `jpegtran -optimize -progressive -copy $copytype $grey "$file" $tempfile`;
+    }
+    if(! -f $tempfile){
+      print("Something went wrong - most likely this is not a valid JPEG file.\n");
+      return($file);
     }
     leanify($tempfile);#Bit ugly, means leanify will be run twice, but still important to re-optimise the jpegtraned file before the size comparison.
     my $before = -s $file;
@@ -637,7 +660,12 @@ sub jpeg2avif(){
     return($injpeg);
   }
   my $ret;
-  $ret=system(@im_converta, $interpng1, '-define', 'heic:speed=0', '-define', 'heic:chroma=444', '-quality', '70', $outavif);
+
+  if(testcommand_nonessential('avifenc')){
+    $ret=system('avifenc',  '--min', '0', '--max', '30', '-s', '0', $interpng1, $outavif);
+  }else{
+    $ret=system(@im_converta, $interpng1, '-define', 'heic:speed=0', '-define', 'heic:chroma=444', '-quality', '70', $outavif);
+  }
   if((-s $outavif) == 0){
     print("  Conversion failed.\n");
     unlink($outavif);
@@ -867,7 +895,25 @@ sub agif2apng($) {
     print("Conversion failed.\n");
     return($input_file);
   }
-  compress_png($output_file);
+  return($output_file);
+}
+
+sub agif2webp($){
+  my $input_file=$_[0];
+  my $output_file=$input_file;
+  $output_file=~ s/\.gif$/\.webp/i;
+  print("Converting $input_file to $output_file\n");
+  if(-e $output_file){
+    print("  Conversion failed: $output_file exists.\n");
+    return($input_file);
+  }
+  testcommand('gif2webp');
+  my $ret=system('gif2webp', '-m', '6', $input_file, '-o', $output_file);
+  if($ret){
+    unlink($output_file);
+    return($input_file);
+  }
+  unlink($input_file);
   return($output_file);
 }
 
@@ -974,7 +1020,7 @@ sub compress_zip() {
   my $zipclear=0;
   if($ext eq '.cbz' || ($ext eq '.zip' && $options{'del-zip-junk'})){
     system('zip', '-qd',$input_file, '*/', #Looks weird, but actually here to delete empty directories.
-           '*.PAR2', '*.PAR', '*.P01', '*.P02', '*.P03', '*.P04', '*.P05', '*.P06',#And all this error correction
+           '*.PAR2', '*.par2', '*.PAR', '*.par','*.P01', '*.P02', '*.P03', '*.P04', '*.P05', '*.P06',#And all this error correction
            '*.SFV', '*.MD5', '*.csv', '*.sfv', '*.md5',                 #Which we are about to invalidate.
            'WS_FTP.LOG', '*/SUPERJPG.TNC', 'PPThumbs.ptn', #And that is just sloppy!
            '*/PPThumbs.ptn', '*/WS_FTP.LOG','*/.DS_Store','.DS_Store','*/Thumbs.db','Thumbs.db',
@@ -1084,6 +1130,7 @@ sub compress_zip() {
   }
   unlink($input_file);
   move($tempfile, $output_file);
+  print("  Moving temporary file ($tempfile) to final location ($output_file)\n");
   chdir($initialcwd);
   return($output_file);
 }
@@ -2055,9 +2102,45 @@ sub process_html(){
   open(input_file, "<:encoding(UTF-8)", $input_filename);
   open(output_file, ">:encoding(UTF-8)", $tempfilename);
   my $changed=0;
+  my $WordHorror=0;
+  my $char1252=0;
   while (<input_file>){
     my $rest=$_;
     my $initial=$rest;
+    if(!$WordHorror && ($_ eq "<meta name=ProgId content=Word.Document>\n")){
+      print("  Detected old pre-2000 Word-generated HTML. Word generates infamously terrible HTML - word-specific cleanup options enabled for this file.\n");
+      $WordHorror=1;
+    }
+    if(index($rest,'<meta http-equiv=Content-Type content="text/html; charset=windows-1252">') == 0){
+      $char1252=1;
+      print("  Using the old windows-1252 charset. This file must be quite old.\n");
+    }
+    if($WordHorror){
+      $rest =~ s/<o:p><\/o:p>//g;
+      $rest =~ s/<span style=["']mso-spacerun: ?yes["']>\\xA0 <\/span>/ /g; #Removing this is fine.
+      $rest =~ s/<span style=["']mso-spacerun: ?yes["']>&nbsp; <\/span>/ /g; #Alternate for second pass filtering.
+      $rest =~ s/<!\[if !supportEmptyParas\]>&nbsp;<!\[endif\]>/&nbsp;/g;
+      $rest =~ s/<span\n/<span /; #Word likes to break HTML in the middle of tags
+      $rest =~ s/:\n//; #And like this too.
+      if($char1252){ #This is weird, but there's a reason.
+        #Back when Microsoft were known as Mega$uck, and the epitome of corporate evil. Back when IE was crushing Netscape. Microsoft played dirty. Even more so than today.
+        #Part of this was introducing a lot of non-standard HTML extensions, which Word exports made much use of. Thus generating lots of HTML which could only be viewed on IE.
+        #Use a rival browser, expect lots of 'errors' to occur because it doesn't support these non-standard extensions. One of these was the \x excape for windows-1252.
+        #Proper HTML would use either the below (more readable) or &#x.
+        #So, if this is a Word export *and* 1252, let's turn some of these into their proper HTML.
+        $rest =~ s/\\x85/&hellip;/g;
+        $rest =~ s/\\x91/&lsquo;/g;
+        $rest =~ s/\\x92/&rsquo;/g;
+        $rest =~ s/\\x93/&ldquo;/g;
+        $rest =~ s/\\x94/&rdquo;/g;
+        $rest =~ s/\\xA0/&nbsp;/g;
+        $rest =~ s/\\xE9/&eacute;/g;
+        $rest =~ s/\\x96/&ndash;/g;
+        $rest =~ s/\\x97/&mdash;/g;
+        $rest =~ s/\\xb1/&plusmn;/g;
+        $rest =~ s/\\xAD/&shy;/g;
+      }
+    }
     my $out='';
     while($rest){
       (my $fixed, $rest, my $abort)=html_line_lc($rest);
@@ -2070,28 +2153,31 @@ sub process_html(){
       }
       $out=$out.$fixed;
     }
-    print output_file $out;
-    if($out ne $initial){
-      $changed++;
-    }
-    if(lc($out) ne lc($initial)){
+    if(!$WordHorror && (lc($out) ne lc($initial))){
       print("  Something went horribly wrong. Aborting HTML processing. Possibly invalid character encoding encountered?\n");
       close(input_file);
       close(output_file);
       unlink($tempfilename);
       return(0);
     }
+    $out =~ s/<br \/>/<br\/>/gi; #Subject of debate: Either form is standard-compliant. But some non-compliant, very old software fails if the space isn't present.
+    if($out ne $initial){
+          $changed++;
+    }
+    print output_file $out;
+
   }
   close(input_file);
   close(output_file);
-  if(!($changed)){
-    print("  HTML is already correctly lower-case. Nothing changed.\n");
+  if($changed==0){
+    print("  HTML optimisation complete.\n");
     unlink($tempfilename);
-    return(0);
+  }else{
+    print("  Modified $changed line(s).\n");
+    move($tempfilename, $input_filename);
+    return($changed);
   }
-  print("  Modified $changed line(s).\n");
-  move($tempfilename, $input_filename);
-  return($changed);
+  return(0);
 }
 
 sub html_line_lc(){
@@ -2352,6 +2438,7 @@ sub processvideo(){
   push(@args, $tempfile);
   print("  Full arguements: @args\n");
   $ret=system(@args);
+  print("\n");
   if($ret){
     print("  Encode failed (Returned $ret).\n");
     unlink($tempfile);
@@ -2372,6 +2459,7 @@ sub processvideo(){
     unlink($tempfile);
     return($oldname);
   }
+  print("  Encode successful, moving:\n  $tempfile\n  $newname\n");
   move($tempfile, $newname);
   if(! -f $tempfile){
     unlink($oldname);
@@ -2386,7 +2474,10 @@ sub recode_audio($){
 
 
   my $timelen=get_media_len($file);
-  $timelen || return($file);
+  if(!$timelen){
+    print("  Media len get failed.\n");
+    return($file);
+  }
   my $sizelen= -s $file;
   my $rate= int(($sizelen) / ($timelen*128)); #Rate in kbps. Why this roundabout way of calculating? Because VBR, and because I don't trust the metadata.
   if($rate<4) {$rate=64}; #Bitrate detection seems to fail in a few low-bitrate files.
@@ -2509,6 +2600,68 @@ sub process_multimedia($){
   }
   move($tempfile, $file);
   unlink($tempfile);
+}
+
+sub MP3Packer_Wrapper($){
+  testcommand_nonessential('ffmpeg') || return(1);
+  if("$^O" eq 'MSWin32'){
+    testcommand_nonessential('mp3packer64') || return(1);
+  }else{
+    if(! -e '/usr/mp3packer/mp3packer64.exe'){
+      print("  Add /usr/mp3packer/mp3packer64.exe for small (1-2%) lossless MP3 optimisation. There's no linux version, so needs wine.\n");
+      return(1);
+    }
+    testcommand_nonessential('wine') || return(1);
+  }
+  print("  Calling mp3packer64.exe\n");
+  my $temp="$tmpfolder/mp3pack-$$-$counter.mp3";
+  $counter++;
+  my $ret;
+  if("$^O" eq 'MSWin32'){
+    $ret=system('mp3packer64.exe','-z', $_[0], $temp);
+  }else{
+    $ret=system('wine','/usr/mp3packer/mp3packer64.exe','-z', $_[0], $temp); #The source for this appears to be long lost, but there's an executable that Wine runs.
+  }
+  my $before = -s $_[0];
+  my $after= -s $temp;
+  if($ret || ($after >= $before) || !$after){
+    print("  MP3Packer unable to achieve space saving.\n");
+    unlink($temp);
+    return(0);
+  }
+  print("  Saving:".($after/$before)."\n");
+  my $beforehash=get_audio_hash($_[0]);
+  my $afterhash=get_audio_hash($temp);
+  if( !$beforehash || !$afterhash){
+    print("  Error during hash validation.\n");
+    unlink($temp);
+    return(1);
+  }
+  if($beforehash ne $afterhash){
+    print("  Hash mismatch. Potential file corruption. Aborting.\n");
+    unlink($temp);
+    return(1);
+  }
+  print("  Hashes match. MP3Packer successful.\n");
+  move($temp, $_[0]);
+  unlink($temp);
+  return(0);
+}
+
+sub get_audio_hash($){
+  my $tempwav="$tmpfolder/audhash-$$-$counter.wav";
+  $counter++;
+  my $ret=system('ffmpeg', '-i', $_[0], '-loglevel', '8', $tempwav);
+  if($ret){
+    unlink($tempwav);
+    print("  Audio hash failed.\n");
+    return(0);
+  }
+  my $hash=getsha256($tempwav);
+  unlink($tempwav);
+  print("    Hashed $_[0]\n");
+  print("      $hash\n");
+  return($hash);
 }
 
 sub get_media_len(){
@@ -2654,14 +2807,18 @@ sub isstreamok(){ #These are the streams we are OK to mess with.
   m/: Video: indeo5 / && return(1);
   m/: Video: mjpeg / && return(1);
   m/: Audio: ac3 / && return(1);
-  m/: Video: msmpeg4v3 / && return(1); #Is this the old WMV?
+  m/: Audio: pcm_s16le / && return(1);
+  m/: Video: msmpeg4v[123] / && return(1); #Is this the old WMV?
   m/: Audio: wmav2 / && return(1); #An obsolete Windows Media Audio format, probably.
   m/: Audio: qdm2 / && return(1); #An audio codec used in old quicktime files.
   m/: Video: svq3 / && return(1); #A video codec used in old quicktime files. Tends to be found alongside the above.
   m/: Audio: vorbis[ ,]/ && return(2); #The 2 says to set audio to copy, not re-encode.
+  m/: Audio: opus[ ,]/ && return(2); #The 2 says to set audio to copy, not re-encode.
   m/: Video: vp6f[ ,]/ && return(1); #Old codec from 2003, sometimes found in old FLV files.
   m/: Video: flv1[ ,]/ && return(1); #Another codec from old FLV files.
   m/: Subtitle: text/ && return(1); #ffmpeg can convert this into webvtt, the one format WebM allows.
+  m/: Subtitle: subrip/ && return(1); #ffmpeg can convert this into webvtt too.
+  m/: Subtitle: webvtt/ && return(1);
   ( m/: Video: h264 / && $options{'video-agg'}) && return(1);
   return(0);
 }
@@ -2730,6 +2887,10 @@ sub leanify($){
   #So basically: JPEG, SWF, ICO, FB2.
   my $tempfile="$tmpfolder/$$-$counter.tmp";
   $counter++;
+  if(! -f $file){
+    print("  Attempted to leanify a non-existing file. Probably triggered by a bug elsewhere in the program.\n  $file\n");
+    return(1);
+  }
   copy($file, $tempfile);
   if(! -f $tempfile){
     die("  Failed when copying to $tmpfolder - possible permissions or free space issue. Terminating.");
@@ -3053,6 +3214,61 @@ sub get_img_size(){
     return(0);
   }
   return(@splitres);
+}
+
+sub optimise_chd($){
+  my $infile=$_[0];
+  testcommand_nonessential('chdman') || return(0);
+  my $info=`chdman info -i "$infile"`;
+  $info =~ s/(\d),(\d)/$1$2/g;
+  $info =~ m/Hunk Size:    (\d*)/;
+  my $hunk=$1;
+  if($? || !$hunk){
+    print("  Error getting hunk size. Probably not a CHD disk image, or the file is damaged.\n");
+    return(1);
+  }
+  $info =~ m/manager ([1234567890\.]+)/;
+  my $version=$1;
+  print("  chdman $version, hunk size: $hunk\n");
+  my $newhunk=$hunk;
+  if($hunk==19584){
+    print("  This is the default size for a CD image. It's a good default, but turning it up might allow for better compression.\n");
+    $newhunk=313344; #The CD format is kind of weird. Three different sector sizes depending on FEC and subchannel things. Trust me, this is a round number for two of those.
+  }
+  try_chd_params($infile, $newhunk, 0);
+  if($version > 0.242){
+    try_chd_params($infile, $newhunk, 'cdzs,cdlz,lzma,zstd');
+  }
+}
+
+sub try_chd_params($$){
+  my $infile=$_[0];
+  my $newhunk=$_[1];
+  my $compression=$_[2];
+  my $tempfile="$tmpfolder/chdtry-$$-$counter.chd";
+  $counter++;
+  my $ret;
+  if(!$compression){
+    $ret=system('chdman', 'copy', '-i', $infile, '-hs', $newhunk, '-o', $tempfile);
+  }else{
+    $ret=system('chdman', 'copy', '-i', $infile, '-hs', $newhunk, '-c', $compression, '-o', $tempfile);
+  }
+  my $oldsize = -s $infile;
+  my $newsize = -s $tempfile;
+  if($ret || !$newsize){
+    print("    Attempt failed.\n");
+    unlink($tempfile);
+    return(1);
+  }
+  if($newsize >= $oldsize){
+    print("    No size reduction achieved.\n");
+    unlink($tempfile);
+  }else{
+    print("    Size reduced to ".($newsize/$oldsize)."\n");
+    move($tempfile, $infile);
+    unlink($tempfile);
+  }
+  return(0);
 }
 
 sub printq(){
