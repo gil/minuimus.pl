@@ -9,8 +9,8 @@
                                              by Codebird |_|
 ```
 
-**Note:** This is not the official repository. The original creator is known as Codebird and hosts Minuimus [here](https://birds-are-nice.me/software/minuimus.html).  
-This repository was created to improve the documentation of dependencies and command line options, primarily to help create a reproducible dockerfile. Additionally, to serve as installation instructions for other users who may find the documentation at the source lacking, especially for a full installation with the numerous optional dependencies.
+> **Note:** This is not the official repository. The original creator is known as Codebird and hosts Minuimus [here](https://birds-are-nice.me/software/minuimus.html).
+> This repo main objective is to provide a up-to-date Dockerfile so it's easier to run than installing all the dependencies the project need.
 
 Minuimus is a file optimizer utility script written in Perl. By default, it can be pointed to a file and it will transparently reduce the file size, leaving all pixels/text/audio/metadata intact. Using command line options, it can also run lossy optimizations and conversions.
 
@@ -26,6 +26,7 @@ As is the case for any optimizer, the size reduction achieved by Minuimus is hig
 
 From the original source, check:
 
+- [Official Page](https://birds-are-nice.me/software/minuimus.html)
 - [README](./src/README)
 - [CHANGELOG](./src/CHANGELOG)
 
