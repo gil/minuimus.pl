@@ -30,6 +30,18 @@ From the original source, check:
 - [README](./src/README)
 - [CHANGELOG](./src/CHANGELOG)
 
+## Supported File Types
+
+Version 4.2 supports the following file types:
+
+- Images: `jpg`, `jpeg`, `jfif`, `png`, `gif`, `tif`, `tiff`, `webp`, `bmp`, `ico`, `pcx`, `svg`, `stl`, `fb2`
+- Documents / Markup: `pdf`, `epub`, `docx`, `pptx`, `xlsx`, `odt`, `ods`, `odp`, `xps`, `html`, `htm`, `css`
+- Archives / Comics: `zip`, `gz`, `tgz`, `7z`, `rar`, `jar`, `ipa`, `cbz`, `cbr`, `cb7`
+- Audio: `mp3`, `flac`, `m4b`
+- Video: `mp4`, `webm`, `mkv`, `avi`, `mpg`, `mpeg`, `ogm`, `mov`, `flv`, `ts`
+- Web / Fonts: `woff`, `swf`
+- Other: `cab`, `chd`
+
 # Quick Start
 
 Build the docker image:
