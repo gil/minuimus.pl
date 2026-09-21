@@ -39,9 +39,11 @@ echo "**** install required and optional packages ****" && \
  imagemagick \
  jbig2dec \
  jpegoptim \
+ libavif-bin \
  libjpeg-progs \
  libtiff-tools \
  lzip \
+ mame-tools \
  mupdf-tools \
  optipng \
  p7zip-full \
